@@ -43,6 +43,7 @@ pub struct ConnectionOffer {
 #[derive(Serialize, Deserialize)]
 pub struct CryptoOffer {
     pub ik: String,
+    pub ed_ik: String,
     pub spk: String,
     pub spk_sig: String,
     pub opk: String,
@@ -109,6 +110,7 @@ impl Session {
             code_type: "offer".to_string(),
             crypto: CryptoOffer {
                 ik: b64(&self.identity.public),
+                ed_ik: b64(&self.identity.ed_public),
                 spk: b64(&self.bundle.signed_prekey),
                 spk_sig: b64(&self.bundle.signed_prekey_sig),
                 opk: b64(&self.bundle.one_time_prekey),
@@ -139,8 +141,10 @@ impl Session {
         }
 
         let their_identity = unb64_32(&conn_offer.crypto.ik)?;
+        let their_ed_identity = unb64_32(&conn_offer.crypto.ed_ik)?;
         let their_bundle = PreKeyBundle {
             identity_key: their_identity,
+            ed_public_key: their_ed_identity,
             signed_prekey: unb64_32(&conn_offer.crypto.spk)?,
             signed_prekey_sig: unb64_64(&conn_offer.crypto.spk_sig)?,
             one_time_prekey: unb64_32(&conn_offer.crypto.opk)?,

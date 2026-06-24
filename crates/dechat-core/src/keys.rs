@@ -20,6 +20,8 @@ pub struct PreKeyBundle {
     #[serde(with = "bytes_serde")]
     pub identity_key: [u8; 32],
     #[serde(with = "bytes_serde")]
+    pub ed_public_key: [u8; 32],
+    #[serde(with = "bytes_serde")]
     pub signed_prekey: [u8; 32],
     #[serde(with = "bytes64_serde")]
     pub signed_prekey_sig: [u8; 64],
@@ -91,6 +93,7 @@ impl PreKeyBundle {
 
         PreKeyBundle {
             identity_key: identity_key.public,
+            ed_public_key: identity_key.ed_public,
             signed_prekey: spk_public.to_bytes(),
             signed_prekey_sig: spk_sig.to_bytes(),
             one_time_prekey: opk_public.to_bytes(),
@@ -98,7 +101,7 @@ impl PreKeyBundle {
     }
 
     pub fn verify_signature(&self) -> bool {
-        let verifying_key = match VerifyingKey::from_bytes(&self.identity_key) {
+        let verifying_key = match VerifyingKey::from_bytes(&self.ed_public_key) {
             Ok(k) => k,
             Err(_) => return false,
         };
