@@ -17,6 +17,141 @@ let hasPassword = false;
 let recoveryPhrase = null;
 let networkSettings = { stun: '', turn: '', turnUser: '', turnPass: '' };
 
+const sessions = new Map();
+let currentSessionId = null;
+
+function createSession(peerName) {
+    const id = 'session_' + Date.now();
+    const engineInstance = new DechatEngine();
+    engineInstance.init();
+
+    const session = {
+        id,
+        engine: engineInstance,
+        connection: null,
+        peerName: peerName || '新连接',
+        fingerprint: engineInstance.get_fingerprint(),
+        messages: [],
+        unread: 0,
+        lastActivity: Date.now(),
+    };
+
+    sessions.set(id, session);
+    renderSessionList();
+    switchSession(id);
+    return session;
+}
+
+function switchSession(id) {
+    currentSessionId = id;
+    const session = sessions.get(id);
+    if (!session) return;
+
+    engine = session.engine;
+    connection = session.connection;
+    session.unread = 0;
+    session.lastActivity = Date.now();
+
+    document.getElementById('my-fingerprint').textContent = session.fingerprint;
+    renderSessionList();
+
+    if (session.connection && session.connection.isConnected) {
+        document.getElementById('connect-screen').style.display = 'none';
+        document.getElementById('chat-screen').style.display = 'flex';
+        document.getElementById('peer-fingerprint').textContent = session.peerName;
+        document.getElementById('connection-status').textContent = '在线';
+        document.getElementById('connection-status').style.background = 'var(--color-accent-dim)';
+        document.getElementById('connection-status').style.color = 'var(--color-accent)';
+    } else {
+        showConnectScreen();
+    }
+
+    renderMessages();
+}
+
+function deleteSession(id) {
+    const session = sessions.get(id);
+    if (session) {
+        if (session.connection) session.connection.close();
+        session.engine.destroy();
+        sessions.delete(id);
+    }
+
+    if (currentSessionId === id) {
+        currentSessionId = null;
+        engine = null;
+        connection = null;
+        showConnectScreen();
+    }
+
+    renderSessionList();
+}
+
+function renderSessionList() {
+    const list = document.getElementById('session-list');
+    if (sessions.size === 0) {
+        list.innerHTML = '<div style="padding: 24px 16px; text-align: center; color: var(--color-foreground-muted); font-size: var(--text-sm);">暂无会话，点击"新建"开始</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+    const sorted = [...sessions.values()].sort((a, b) => b.lastActivity - a.lastActivity);
+
+    for (const s of sorted) {
+        const item = document.createElement('div');
+        item.className = 'session-item' + (s.id === currentSessionId ? ' active' : '');
+        item.setAttribute('role', 'listitem');
+
+        const connected = s.connection && s.connection.isConnected;
+        const statusDot = connected
+            ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--color-accent);flex-shrink:0;"></span>'
+            : '<span style="width:8px;height:8px;border-radius:50%;background:var(--color-foreground-muted);flex-shrink:0;"></span>';
+
+        item.innerHTML = `
+            ${statusDot}
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:var(--text-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.peerName}</div>
+                <div style="font-size:11px;color:var(--color-foreground-muted);">${connected ? '在线' : '离线'}</div>
+            </div>
+            ${s.unread > 0 ? `<span style="background:var(--color-primary-light);color:#fff;font-size:11px;padding:2px 6px;border-radius:10px;">${s.unread}</span>` : ''}
+            <button class="btn btn-icon btn-ghost btn-sm delete-session" data-id="${s.id}" aria-label="删除会话" style="opacity:0.5;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        `;
+
+        item.addEventListener('click', (e) => {
+            if (e.target.closest('.delete-session')) return;
+            switchSession(s.id);
+        });
+
+        const delBtn = item.querySelector('.delete-session');
+        if (delBtn) {
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`删除与 "${s.peerName}" 的会话？`)) {
+                    deleteSession(s.id);
+                }
+            });
+        }
+
+        list.appendChild(item);
+    }
+}
+
+function renderMessages() {
+    const container = document.getElementById('messages');
+    container.innerHTML = '';
+
+    const session = sessions.get(currentSessionId);
+    if (!session) return;
+
+    for (const msg of session.messages) {
+        addMessageToUI(msg.payload, msg.fromSelf, msg.isBurn, false);
+    }
+
+    container.scrollTop = container.scrollHeight;
+}
+
 function showToast(message, type = 'info', duration = 3000) {
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
@@ -112,7 +247,10 @@ function setupEventListeners() {
     });
     document.getElementById('btn-recover').addEventListener('click', handleRecover);
 
-    document.getElementById('btn-new-chat').addEventListener('click', showConnectScreen);
+    document.getElementById('btn-new-chat').addEventListener('click', () => {
+        createSession('新连接');
+        showConnectScreen();
+    });
     document.getElementById('btn-create-offer').addEventListener('click', handleCreateOffer);
     document.getElementById('btn-accept-offer').addEventListener('click', handleAcceptOffer);
     document.getElementById('btn-copy-offer').addEventListener('click', handleCopyOffer);
@@ -227,19 +365,13 @@ async function handleRecoveryConfirmed() {
 }
 
 async function handleInit(withPassword) {
-    engine = new DechatEngine();
-    const result = engine.init();
+    createSession('新连接');
+    const session = sessions.get(currentSessionId);
 
-    if (!withPassword) {
-        const identityBytes = new Uint8Array(32);
-        crypto.getRandomValues(identityBytes);
-        await storage.deriveKeyFromIdentity(identityBytes);
-    }
+    localStorage.setItem('dechat_fingerprint', session.fingerprint);
+    await storage.saveSetting('fingerprint', session.fingerprint);
 
-    localStorage.setItem('dechat_fingerprint', result.fingerprint);
-    await storage.saveSetting('fingerprint', result.fingerprint);
-
-    document.getElementById('my-fingerprint').textContent = result.fingerprint;
+    document.getElementById('my-fingerprint').textContent = session.fingerprint;
     document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('main-screen').style.display = 'flex';
@@ -257,8 +389,7 @@ async function handleUnlock() {
         await storage.deriveKeyFromPassword(pw);
         const fp = await storage.getSetting('fingerprint');
         if (fp) {
-            engine = new DechatEngine();
-            engine.init();
+            createSession('已恢复');
             document.getElementById('my-fingerprint').textContent = fp;
             document.getElementById('lock-screen').style.display = 'none';
             document.getElementById('main-screen').style.display = 'flex';
@@ -286,8 +417,7 @@ async function handleRecover() {
 
         const fp = await storage.getSetting('fingerprint');
         if (fp) {
-            engine = new DechatEngine();
-            engine.init();
+            createSession('已恢复');
             document.getElementById('my-fingerprint').textContent = fp;
             document.getElementById('lock-screen').style.display = 'none';
             document.getElementById('main-screen').style.display = 'flex';
@@ -309,11 +439,27 @@ function showConnectScreen() {
     document.getElementById('input-answer').value = '';
 }
 
-function handleCreateOffer() {
-    const offerJson = engine.create_offer();
-    document.getElementById('output-offer').value = offerJson;
-    document.getElementById('offer-output').style.display = 'block';
-    document.getElementById('answer-input').style.display = 'block';
+async function handleCreateOffer() {
+    const btn = document.getElementById('btn-create-offer');
+    setButtonLoading(btn, true);
+
+    try {
+        const session = sessions.get(currentSessionId);
+        const conn = new SimpleP2P(getRTCConfig(), onMessageReceived, onConnected, onDisconnected);
+        session.connection = conn;
+        connection = conn;
+
+        showToast('正在收集网络信息...', 'info');
+        const { sdp, candidates } = await conn.createOffer();
+        const offerJson = engine.create_offer(sdp, JSON.stringify(candidates));
+        document.getElementById('output-offer').value = offerJson;
+        document.getElementById('offer-output').style.display = 'block';
+        document.getElementById('answer-input').style.display = 'block';
+    } catch (e) {
+        showToast('生成连接码失败: ' + e.message, 'error');
+    } finally {
+        setButtonLoading(btn, false);
+    }
 }
 
 function handleCopyOffer() {
@@ -347,33 +493,63 @@ function handleShowQR() {
     }
 }
 
-function handleAcceptOffer() {
+async function handleAcceptOffer() {
     const offerJson = document.getElementById('input-offer').value.trim();
     if (!offerJson) return;
 
+    const btn = document.getElementById('btn-accept-offer');
+    setButtonLoading(btn, true);
+
     try {
-        const answerJson = engine.create_answer(offerJson);
+        const session = sessions.get(currentSessionId);
+        const offer = JSON.parse(offerJson);
+        const offerSdp = atob(offer.webrtc.sdp);
+        const offerCandidates = offer.webrtc.candidates;
+
+        const conn = new SimpleP2P(getRTCConfig(), onMessageReceived, onConnected, onDisconnected);
+        session.connection = conn;
+        connection = conn;
+
+        showToast('正在收集网络信息...', 'info');
+        const { sdp, candidates } = await conn.createAnswer(offerSdp, offerCandidates);
+
+        const answerJson = engine.create_answer(offerJson, sdp, JSON.stringify(candidates));
         document.getElementById('output-offer').value = answerJson;
         document.getElementById('offer-output').style.display = 'block';
         document.getElementById('answer-input').style.display = 'none';
-        setupWebRTCPeer(false);
+
+        if (offer.crypto) {
+            session.peerName = '对方';
+        }
+
         showToast('连接码已生成，请发送给对方', 'success');
     } catch (e) {
         showToast('连接码无效: ' + e, 'error');
+    } finally {
+        setButtonLoading(btn, false);
     }
 }
 
-function handleComplete() {
+async function handleComplete() {
     const answerJson = document.getElementById('input-answer').value.trim();
     if (!answerJson) return;
 
+    const btn = document.getElementById('btn-complete');
+    setButtonLoading(btn, true);
+
     try {
+        const answer = JSON.parse(answerJson);
+        const answerSdp = atob(answer.webrtc.sdp);
+        const answerCandidates = answer.webrtc.candidates;
+
+        await connection.acceptAnswer(answerSdp, answerCandidates);
         engine.complete_handshake(answerJson);
-        setupWebRTCPeer(true);
         enterChatScreen();
-        showToast('加密连接已建立', 'success');
+        showToast('正在建立连接...', 'info');
     } catch (e) {
         showToast('连接码无效: ' + e, 'error');
+    } finally {
+        setButtonLoading(btn, false);
     }
 }
 
@@ -449,18 +625,29 @@ async function handleSend() {
     }
 
     try {
-        const payloadJson = engine.encrypt_message(text, burnJson);
-        const payload = JSON.parse(payloadJson);
+        const result = engine.encrypt_message(text, burnJson);
+        const resultObj = JSON.parse(result);
+        const payload = JSON.parse(resultObj.payload);
 
         if (connection && connection.isConnected) {
-            connection.sendMessage(payloadJson);
+            connection.sendMessage(result);
         }
 
         addMessageToUI(payload, true, burnEnabled);
         input.value = '';
 
+        const session = sessions.get(currentSessionId);
+        session.messages.push({
+            payload,
+            fromSelf: true,
+            isBurn: burnEnabled,
+            decryptedContent: text,
+            wire: resultObj.wire,
+        });
+        session.lastActivity = Date.now();
+
         if (!burnEnabled) {
-            await storage.saveMessage('current', {
+            await storage.saveMessage(currentSessionId, {
                 id: payload.id,
                 content: text,
                 fromSelf: true,
@@ -473,14 +660,48 @@ async function handleSend() {
     }
 }
 
-function onMessageReceived(payloadJson) {
+function onMessageReceived(data) {
     try {
-        const payload = JSON.parse(payloadJson);
+        const msg = JSON.parse(data);
+        const payload = JSON.parse(msg.payload);
         const isBurn = payload.burn != null;
-        addMessageToUI(payload, false, isBurn);
+
+        let displayContent;
+        try {
+            displayContent = engine.decrypt_message(msg.wire, msg.payload);
+        } catch (e) {
+            displayContent = payload.content || '[encrypted]';
+        }
+
+        const displayPayload = { ...payload, content: displayContent };
+        addMessageToUI(displayPayload, false, isBurn);
 
         if (isBurn && payload.burn.mode === 'on_read') {
             engine.trigger_read(payload.id);
+        }
+
+        const session = sessions.get(currentSessionId);
+        if (session) {
+            session.messages.push({
+                payload: displayPayload,
+                fromSelf: false,
+                isBurn,
+                decryptedContent: displayContent,
+                wire: msg.wire,
+            });
+            session.lastActivity = Date.now();
+            session.unread++;
+            renderSessionList();
+        }
+
+        if (!isBurn) {
+            storage.saveMessage(currentSessionId, {
+                id: payload.id,
+                content: displayContent,
+                fromSelf: false,
+                timestamp: payload.ts,
+                kind: 'text',
+            });
         }
     } catch (e) {
         console.error('Receive error:', e);
@@ -630,6 +851,7 @@ async function handleShowRecovery() {
 async function handlePanic() {
     if (!confirm('确定要销毁所有数据吗？此操作不可逆。')) return;
 
+    if (connection) connection.close();
     if (engine) engine.destroy();
     if (storage) await storage.destroy();
     localStorage.clear();
@@ -645,8 +867,7 @@ async function handlePanic() {
 }
 
 class SimpleP2P {
-    constructor(isInitiator, rtcConfig, onMessage, onConnect, onDisconnect) {
-        this.isInitiator = isInitiator;
+    constructor(rtcConfig, onMessage, onConnect, onDisconnect) {
         this.onMessage = onMessage;
         this.onConnect = onConnect;
         this.onDisconnect = onDisconnect;
@@ -665,13 +886,80 @@ class SimpleP2P {
                 this.onDisconnect();
             }
         };
+    }
 
-        if (isInitiator) {
-            this.channel = this.pc.createDataChannel('dechat');
-            this.setupChannel(this.channel);
-        } else {
-            this.pc.ondatachannel = (e) => { this.setupChannel(e.channel); };
+    async createOffer() {
+        this.channel = this.pc.createDataChannel('dechat');
+        this.setupChannel(this.channel);
+
+        const offer = await this.pc.createOffer();
+        await this.pc.setLocalDescription(offer);
+
+        const candidates = await this.gatherICECandidates();
+        return { sdp: this.pc.localDescription.sdp, candidates };
+    }
+
+    async createAnswer(offerSdp, offerCandidates) {
+        await this.pc.setRemoteDescription({ type: 'offer', sdp: offerSdp });
+
+        for (const c of offerCandidates) {
+            await this.pc.addIceCandidate(new RTCIceCandidate({
+                candidate: c.candidate,
+                sdpMid: c.sdpMid,
+                sdpMLineIndex: c.sdpMLineIndex,
+            }));
         }
+
+        this.pc.ondatachannel = (e) => { this.setupChannel(e.channel); };
+
+        const answer = await this.pc.createAnswer();
+        await this.pc.setLocalDescription(answer);
+
+        const candidates = await this.gatherICECandidates();
+        return { sdp: this.pc.localDescription.sdp, candidates };
+    }
+
+    async acceptAnswer(answerSdp, answerCandidates) {
+        await this.pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+        for (const c of answerCandidates) {
+            await this.pc.addIceCandidate(new RTCIceCandidate({
+                candidate: c.candidate,
+                sdpMid: c.sdpMid,
+                sdpMLineIndex: c.sdpMLineIndex,
+            }));
+        }
+    }
+
+    gatherICECandidates(timeoutMs = 10000) {
+        return new Promise((resolve) => {
+            const candidates = [];
+            let settled = false;
+
+            const done = () => {
+                if (settled) return;
+                settled = true;
+                resolve(candidates);
+            };
+
+            this.pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    candidates.push({
+                        candidate: event.candidate.candidate,
+                        sdpMid: event.candidate.sdpMid,
+                        sdpMLineIndex: event.candidate.sdpMLineIndex,
+                    });
+                }
+            };
+
+            this.pc.onicegatheringstatechange = () => {
+                if (this.pc.iceGatheringState === 'complete') done();
+            };
+
+            setTimeout(done, timeoutMs);
+
+            if (this.pc.iceGatheringState === 'complete') done();
+        });
     }
 
     setupChannel(channel) {
@@ -684,6 +972,11 @@ class SimpleP2P {
         if (this.channel && this.channel.readyState === 'open') {
             this.channel.send(data);
         }
+    }
+
+    close() {
+        if (this.channel) this.channel.close();
+        if (this.pc) this.pc.close();
     }
 }
 

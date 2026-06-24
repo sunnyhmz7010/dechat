@@ -22,11 +22,26 @@ pub struct Session {
     pub peer_fingerprint: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ICECandidate {
+    pub candidate: String,
+    #[serde(rename = "sdpMid")]
+    pub sdp_mid: String,
+    #[serde(rename = "sdpMLineIndex")]
+    pub sdp_mline_index: u32,
+}
+
 #[derive(Serialize, Deserialize)]
-pub struct OfferCode {
+pub struct ConnectionOffer {
     pub v: u32,
     #[serde(rename = "type")]
-    pub oc_type: String,
+    pub code_type: String,
+    pub crypto: CryptoOffer,
+    pub webrtc: WebRTCOffer,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CryptoOffer {
     pub ik: String,
     pub spk: String,
     pub spk_sig: String,
@@ -35,12 +50,30 @@ pub struct OfferCode {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct AnswerCode {
+pub struct WebRTCOffer {
+    pub sdp: String,
+    pub candidates: Vec<ICECandidate>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ConnectionAnswer {
     pub v: u32,
     #[serde(rename = "type")]
-    pub oc_type: String,
+    pub code_type: String,
+    pub crypto: CryptoAnswer,
+    pub webrtc: WebRTCAnswer,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CryptoAnswer {
     pub ik: String,
     pub ek: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WebRTCAnswer {
+    pub sdp: String,
+    pub candidates: Vec<ICECandidate>,
 }
 
 pub struct OfferData {
@@ -69,39 +102,55 @@ impl Session {
         }
     }
 
-    pub fn create_offer(&self) -> Result<OfferData, String> {
+    pub fn create_offer(&self, sdp: &str, candidates: Vec<ICECandidate>) -> Result<OfferData, String> {
         let ek = crate::keys::EphemeralKeyPair::generate();
-        let offer_code = OfferCode {
-            v: 1,
-            oc_type: "offer".to_string(),
-            ik: b64(&self.identity.public),
-            spk: b64(&self.bundle.signed_prekey),
-            spk_sig: b64(&self.bundle.signed_prekey_sig),
-            opk: b64(&self.bundle.one_time_prekey),
-            ek: b64(&ek.public),
+        let conn_offer = ConnectionOffer {
+            v: 2,
+            code_type: "offer".to_string(),
+            crypto: CryptoOffer {
+                ik: b64(&self.identity.public),
+                spk: b64(&self.bundle.signed_prekey),
+                spk_sig: b64(&self.bundle.signed_prekey_sig),
+                opk: b64(&self.bundle.one_time_prekey),
+                ek: b64(&ek.public),
+            },
+            webrtc: WebRTCOffer {
+                sdp: b64(sdp.as_bytes()),
+                candidates,
+            },
         };
         Ok(OfferData {
-            json: serde_json::to_string(&offer_code).map_err(|e| e.to_string())?,
+            json: serde_json::to_string(&conn_offer).map_err(|e| e.to_string())?,
             fingerprint: crate::keys::fingerprint(&self.identity.public),
         })
     }
 
-    pub fn create_answer(&mut self, offer_json: &str) -> Result<AnswerData, String> {
-        let offer: OfferCode = serde_json::from_str(offer_json).map_err(|e| e.to_string())?;
+    pub fn create_answer(
+        &mut self,
+        offer_json: &str,
+        sdp: &str,
+        candidates: Vec<ICECandidate>,
+    ) -> Result<AnswerData, String> {
+        let conn_offer: ConnectionOffer =
+            serde_json::from_str(offer_json).map_err(|e| e.to_string())?;
 
-        let their_identity = unb64_32(&offer.ik)?;
+        if conn_offer.v < 2 {
+            return Err("连接码版本过旧，请让对方更新应用".into());
+        }
+
+        let their_identity = unb64_32(&conn_offer.crypto.ik)?;
         let their_bundle = PreKeyBundle {
             identity_key: their_identity,
-            signed_prekey: unb64_32(&offer.spk)?,
-            signed_prekey_sig: unb64_64(&offer.spk_sig)?,
-            one_time_prekey: unb64_32(&offer.opk)?,
+            signed_prekey: unb64_32(&conn_offer.crypto.spk)?,
+            signed_prekey_sig: unb64_64(&conn_offer.crypto.spk_sig)?,
+            one_time_prekey: unb64_32(&conn_offer.crypto.opk)?,
         };
 
         if !their_bundle.verify_signature() {
             return Err("Invalid signature on prekey bundle".into());
         }
 
-        let their_ephemeral = unb64_32(&offer.ek)?;
+        let their_ephemeral = unb64_32(&conn_offer.crypto.ek)?;
 
         let ratchet = RatchetState::responder(
             &self.secret_keys,
@@ -115,26 +164,38 @@ impl Session {
         self.peer_fingerprint = Some(crate::keys::fingerprint(&their_identity));
 
         let ek = crate::keys::EphemeralKeyPair::generate();
-        let answer_code = AnswerCode {
-            v: 1,
-            oc_type: "answer".to_string(),
-            ik: b64(&self.identity.public),
-            ek: b64(&ek.public),
+        let conn_answer = ConnectionAnswer {
+            v: 2,
+            code_type: "answer".to_string(),
+            crypto: CryptoAnswer {
+                ik: b64(&self.identity.public),
+                ek: b64(&ek.public),
+            },
+            webrtc: WebRTCAnswer {
+                sdp: b64(sdp.as_bytes()),
+                candidates,
+            },
         };
 
         Ok(AnswerData {
-            json: serde_json::to_string(&answer_code).map_err(|e| e.to_string())?,
+            json: serde_json::to_string(&conn_answer).map_err(|e| e.to_string())?,
             fingerprint: self.peer_fingerprint.clone().unwrap(),
         })
     }
 
     pub fn complete_handshake(&mut self, answer_json: &str) -> Result<(), String> {
-        let answer: AnswerCode = serde_json::from_str(answer_json).map_err(|e| e.to_string())?;
+        let conn_answer: ConnectionAnswer =
+            serde_json::from_str(answer_json).map_err(|e| e.to_string())?;
 
-        let their_identity = unb64_32(&answer.ik)?;
-        let their_ephemeral = unb64_32(&answer.ek)?;
+        if conn_answer.v < 2 {
+            return Err("连接码版本过旧，请让对方更新应用".into());
+        }
 
-        let (ratchet, _ek_public) = RatchetState::initiator(&self.secret_keys, &self.bundle, &their_ephemeral);
+        let their_identity = unb64_32(&conn_answer.crypto.ik)?;
+        let their_ephemeral = unb64_32(&conn_answer.crypto.ek)?;
+
+        let (ratchet, _ek_public) =
+            RatchetState::initiator(&self.secret_keys, &self.bundle, &their_ephemeral);
         self.ratchet = Some(ratchet);
         self.phase = SessionPhase::Connected;
         self.peer_fingerprint = Some(crate::keys::fingerprint(&their_identity));
@@ -142,7 +203,11 @@ impl Session {
         Ok(())
     }
 
-    pub fn encrypt_message(&mut self, plaintext: &[u8], burn: Option<BurnConfig>) -> Result<(String, Vec<u8>), String> {
+    pub fn encrypt_message(
+        &mut self,
+        plaintext: &[u8],
+        burn: Option<BurnConfig>,
+    ) -> Result<(String, Vec<u8>), String> {
         let ratchet = self.ratchet.as_mut().ok_or("not connected")?;
         let mut msg = Message::new_text(true, plaintext.to_vec(), burn.clone());
 
@@ -163,10 +228,16 @@ impl Session {
         Ok((payload_json, wire_bytes))
     }
 
-    pub fn decrypt_message(&mut self, wire_json: &str, payload_json: &str) -> Result<Message, String> {
+    pub fn decrypt_message(
+        &mut self,
+        wire_json: &str,
+        payload_json: &str,
+    ) -> Result<Message, String> {
         let ratchet = self.ratchet.as_mut().ok_or("not connected")?;
-        let wire: crate::signal::WireMessage = serde_json::from_str(wire_json).map_err(|e| e.to_string())?;
-        let payload: WirePayload = serde_json::from_str(payload_json).map_err(|e| e.to_string())?;
+        let wire: crate::signal::WireMessage =
+            serde_json::from_str(wire_json).map_err(|e| e.to_string())?;
+        let payload: WirePayload =
+            serde_json::from_str(payload_json).map_err(|e| e.to_string())?;
 
         let plaintext = ratchet.decrypt(&wire)?;
 
@@ -204,7 +275,11 @@ impl Session {
     }
 
     pub fn trigger_read(&mut self, msg_id: &str) -> Option<WireNotification> {
-        if let Some(msg) = self.messages.iter_mut().find(|m| m.id == msg_id && !m.from_self) {
+        if let Some(msg) = self
+            .messages
+            .iter_mut()
+            .find(|m| m.id == msg_id && !m.from_self)
+        {
             if msg.burn.as_ref().map_or(false, |b| b.mode == BurnMode::OnRead) {
                 msg.trigger_burn();
                 return Some(WireNotification::burn_trigger(msg_id, "read"));
@@ -214,7 +289,11 @@ impl Session {
     }
 
     pub fn trigger_action(&mut self, msg_id: &str) -> Option<WireNotification> {
-        if let Some(msg) = self.messages.iter_mut().find(|m| m.id == msg_id && !m.from_self) {
+        if let Some(msg) = self
+            .messages
+            .iter_mut()
+            .find(|m| m.id == msg_id && !m.from_self)
+        {
             if msg.burn.as_ref().map_or(false, |b| b.mode == BurnMode::OnAction) {
                 msg.trigger_burn();
                 return Some(WireNotification::burn_trigger(msg_id, "download"));
@@ -259,18 +338,22 @@ fn b64(data: &[u8]) -> String {
 }
 
 fn unb64_32(s: &str) -> Result<[u8; 32], String> {
-    let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() != 32 { return Err("invalid key length".into()); }
+    let bytes =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s).map_err(|e| e.to_string())?;
+    if bytes.len() != 32 {
+        return Err("invalid key length".into());
+    }
     let mut arr = [0u8; 32];
     arr.copy_from_slice(&bytes);
     Ok(arr)
 }
 
 fn unb64_64(s: &str) -> Result<[u8; 64], String> {
-    let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() != 64 { return Err("invalid sig length".into()); }
+    let bytes =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s).map_err(|e| e.to_string())?;
+    if bytes.len() != 64 {
+        return Err("invalid sig length".into());
+    }
     let mut arr = [0u8; 64];
     arr.copy_from_slice(&bytes);
     Ok(arr)

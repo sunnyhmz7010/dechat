@@ -1,7 +1,7 @@
-use wasm_bindgen::prelude::*;
-use dechat_core::session::Session;
 use dechat_core::message::BurnConfig;
+use dechat_core::session::{ICECandidate, Session};
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct DechatEngine {
@@ -22,24 +22,40 @@ impl DechatEngine {
         serde_wasm_bindgen::to_value(&InitResult {
             fingerprint: fp,
             status: "initialized".to_string(),
-        }).unwrap()
+        })
+        .unwrap()
     }
 
-    pub fn create_offer(&self) -> Result<String, JsValue> {
+    pub fn create_offer(&self, sdp: &str, candidates_json: &str) -> Result<String, JsValue> {
         let session = self.session.as_ref().ok_or("not initialized")?;
-        let offer = session.create_offer().map_err(|e| JsValue::from_str(&e))?;
+        let candidates: Vec<ICECandidate> =
+            serde_json::from_str(candidates_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let offer = session
+            .create_offer(sdp, candidates)
+            .map_err(|e| JsValue::from_str(&e))?;
         Ok(offer.json)
     }
 
-    pub fn create_answer(&mut self, offer_json: &str) -> Result<String, JsValue> {
+    pub fn create_answer(
+        &mut self,
+        offer_json: &str,
+        sdp: &str,
+        candidates_json: &str,
+    ) -> Result<String, JsValue> {
         let session = self.session.as_mut().ok_or("not initialized")?;
-        let answer = session.create_answer(offer_json).map_err(|e| JsValue::from_str(&e))?;
+        let candidates: Vec<ICECandidate> =
+            serde_json::from_str(candidates_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let answer = session
+            .create_answer(offer_json, sdp, candidates)
+            .map_err(|e| JsValue::from_str(&e))?;
         Ok(answer.json)
     }
 
     pub fn complete_handshake(&mut self, answer_json: &str) -> Result<(), JsValue> {
         let session = self.session.as_mut().ok_or("not initialized")?;
-        session.complete_handshake(answer_json).map_err(|e| JsValue::from_str(&e))?;
+        session
+            .complete_handshake(answer_json)
+            .map_err(|e| JsValue::from_str(&e))?;
         Ok(())
     }
 
@@ -48,16 +64,30 @@ impl DechatEngine {
         let burn: Option<BurnConfig> = if burn_json.is_empty() {
             None
         } else {
-            Some(serde_json::from_str(burn_json).map_err(|e| JsValue::from_str(&e.to_string()))?)
+            Some(
+                serde_json::from_str(burn_json)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?,
+            )
         };
-        let (payload_json, _wire_bytes) = session.encrypt_message(plaintext.as_bytes(), burn)
+        let (payload_json, wire_bytes) = session
+            .encrypt_message(plaintext.as_bytes(), burn)
             .map_err(|e| JsValue::from_str(&e))?;
-        Ok(payload_json)
+        let wire_json = String::from_utf8(wire_bytes).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let result = serde_json::json!({
+            "wire": wire_json,
+            "payload": payload_json,
+        });
+        Ok(result.to_string())
     }
 
-    pub fn decrypt_message(&mut self, wire_json: &str, payload_json: &str) -> Result<String, JsValue> {
+    pub fn decrypt_message(
+        &mut self,
+        wire_json: &str,
+        payload_json: &str,
+    ) -> Result<String, JsValue> {
         let session = self.session.as_mut().ok_or("not initialized")?;
-        let msg = session.decrypt_message(wire_json, payload_json)
+        let msg = session
+            .decrypt_message(wire_json, payload_json)
             .map_err(|e| JsValue::from_str(&e))?;
         Ok(String::from_utf8_lossy(&msg.content).to_string())
     }
