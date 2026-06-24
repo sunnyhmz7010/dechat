@@ -4,172 +4,245 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeChat - 去中心化加密聊天</title>
+    <meta name="description" content="零服务器端到端加密聊天，Signal Protocol 保护您的隐私">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>">
 </head>
 <body>
     <div id="app">
-        <div id="lock-screen" class="screen" style="display:none">
+        <div id="lock-screen" class="screen" role="dialog" aria-label="解锁" style="display:none">
             <div class="lock-container">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
                 <h1>DeChat</h1>
-                <p class="subtitle">输入密码解锁</p>
-                <input type="password" id="lock-password" placeholder="密码" class="input-field">
-                <button id="btn-unlock" class="btn primary">解锁</button>
-                <button id="btn-use-recovery" class="btn secondary small">使用恢复短语</button>
-                <div id="recovery-section" style="display:none">
-                    <textarea id="recovery-phrase-input" placeholder="输入恢复短语..." rows="3" class="input-field"></textarea>
-                    <button id="btn-recover" class="btn secondary">恢复</button>
+                <p class="subtitle">输入密码解锁聊天记录</p>
+                <label for="lock-password" class="sr-only">密码</label>
+                <input type="password" id="lock-password" placeholder="输入密码" class="input-field" autocomplete="current-password">
+                <button id="btn-unlock" class="btn btn-primary">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                    解锁
+                </button>
+                <button id="btn-use-recovery" class="btn btn-ghost btn-sm">使用恢复短语</button>
+                <div id="recovery-section" style="display:none; width:100%;">
+                    <label for="recovery-phrase-input" class="sr-only">恢复短语</label>
+                    <textarea id="recovery-phrase-input" placeholder="输入恢复短语 (空格分隔)..." rows="3" class="input-field"></textarea>
+                    <button id="btn-recover" class="btn btn-secondary" style="width:100%; margin-top:8px;">恢复</button>
                 </div>
             </div>
         </div>
 
         <div id="setup-screen" class="screen">
             <div class="setup-container">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-primary-light)">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
                 <h1>DeChat</h1>
-                <p class="subtitle">去中心化端到端加密聊天</p>
+                <p class="subtitle">去中心化端到端加密聊天<br>零服务器 · Signal Protocol · 阅后即焚</p>
                 <div id="identity-info" style="display:none">
-                    <p>你的身份指纹:</p>
+                    <p style="font-size: var(--text-xs); color: var(--color-foreground-secondary);">你的身份指纹:</p>
                     <code id="fingerprint"></code>
                 </div>
-                <div class="setup-options">
-                    <button id="btn-init" class="btn primary">直接开始</button>
+                <div class="setup-options" id="setup-options">
+                    <button id="btn-init" class="btn btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                        直接开始
+                    </button>
                     <div class="divider">或</div>
-                    <button id="btn-init-password" class="btn secondary">设置密码保护</button>
+                    <button id="btn-init-password" class="btn btn-secondary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        设置密码保护
+                    </button>
                 </div>
                 <div id="password-setup" style="display:none">
-                    <input type="password" id="new-password" placeholder="设置密码" class="input-field">
-                    <input type="password" id="confirm-password" placeholder="确认密码" class="input-field">
-                    <button id="btn-confirm-password" class="btn primary">确认</button>
+                    <label for="new-password" class="sr-only">设置密码</label>
+                    <input type="password" id="new-password" placeholder="设置密码 (至少4位)" class="input-field" autocomplete="new-password">
+                    <label for="confirm-password" class="sr-only">确认密码</label>
+                    <input type="password" id="confirm-password" placeholder="确认密码" class="input-field" autocomplete="new-password">
+                    <button id="btn-confirm-password" class="btn btn-primary" style="width:100%">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                        确认
+                    </button>
                 </div>
                 <div id="recovery-phrase-display" style="display:none">
-                    <p>请妥善保管恢复短语 (丢失密码后可用):</p>
-                    <div id="recovery-words" class="recovery-words"></div>
-                    <button id="btn-copy-recovery" class="btn small">复制</button>
-                    <button id="btn-confirm-recovery" class="btn primary">我已保存</button>
+                    <p style="font-size: var(--text-sm); color: var(--color-warning); text-align:center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        请妥善保管恢复短语，丢失密码后可用于恢复
+                    </p>
+                    <div id="recovery-words" class="recovery-words" role="list" aria-label="恢复短语"></div>
+                    <div style="display:flex; gap:8px;">
+                        <button id="btn-copy-recovery" class="btn btn-ghost btn-sm" style="flex:1">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            复制
+                        </button>
+                        <button id="btn-confirm-recovery" class="btn btn-primary" style="flex:1">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            我已保存
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div id="main-screen" class="screen" style="display:none">
-            <div class="sidebar">
+            <div class="sidebar" id="sidebar" role="navigation" aria-label="会话列表">
                 <div class="sidebar-header">
                     <h2>DeChat</h2>
                     <div class="sidebar-actions">
-                        <button id="btn-settings" class="btn icon" title="设置">⚙</button>
-                        <button id="btn-new-chat" class="btn small">新建连接</button>
+                        <button id="btn-settings" class="btn btn-icon btn-ghost" aria-label="设置">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        </button>
+                        <button id="btn-new-chat" class="btn btn-sm btn-primary">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            新建
+                        </button>
                     </div>
                 </div>
-                <div id="session-list" class="session-list"></div>
+                <div id="session-list" class="session-list" role="list" aria-label="聊天会话">
+                    <div style="padding: 24px 16px; text-align: center; color: var(--color-foreground-muted); font-size: var(--text-sm);">
+                        暂无会话，点击"新建"开始
+                    </div>
+                </div>
                 <div class="sidebar-footer">
                     <div class="fingerprint-display">
-                        <span class="label">我的指纹:</span>
-                        <code id="my-fingerprint"></code>
+                        <span class="label">我的指纹</span>
+                        <code id="my-fingerprint">-</code>
                     </div>
-                    <button id="btn-panic" class="btn danger small" title="按 Esc 3 次也可触发">销毁</button>
+                    <button id="btn-panic" class="btn btn-danger btn-sm" title="按 Esc 3 次也可触发" aria-label="销毁所有数据">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        销毁
+                    </button>
                 </div>
             </div>
 
             <div class="chat-area">
                 <div id="connect-screen" class="connect-screen">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-foreground-muted); opacity: 0.5">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
                     <h3>开始聊天</h3>
-                    <p>点击"新建连接"生成连接码，或粘贴对方的连接码</p>
+                    <p>生成连接码发送给对方，或粘贴对方的连接码建立加密连接</p>
                     <div class="connect-actions">
-                        <button id="btn-create-offer" class="btn primary">生成连接码</button>
+                        <button id="btn-create-offer" class="btn btn-primary">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            生成连接码
+                        </button>
                         <div class="divider">或</div>
-                        <textarea id="input-offer" placeholder="粘贴对方的连接码..." rows="4"></textarea>
-                        <button id="btn-accept-offer" class="btn secondary">接受连接</button>
+                        <label for="input-offer" class="sr-only">粘贴对方连接码</label>
+                        <textarea id="input-offer" placeholder="粘贴对方的连接码..." rows="4" aria-label="对方连接码"></textarea>
+                        <button id="btn-accept-offer" class="btn btn-secondary">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            接受连接
+                        </button>
                     </div>
                     <div id="offer-output" style="display:none">
-                        <p>你的连接码 (发送给对方):</p>
-                        <textarea id="output-offer" readonly rows="6"></textarea>
+                        <p style="font-size: var(--text-sm); color: var(--color-foreground-secondary); margin-bottom: 8px;">你的连接码 (发送给对方):</p>
+                        <textarea id="output-offer" readonly rows="6" aria-label="你的连接码"></textarea>
                         <div class="offer-actions">
-                            <button id="btn-copy-offer" class="btn small">复制</button>
-                            <button id="btn-show-qr" class="btn small">显示二维码</button>
+                            <button id="btn-copy-offer" class="btn btn-sm btn-secondary">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                复制
+                            </button>
+                            <button id="btn-show-qr" class="btn btn-sm btn-ghost">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><rect x="20" y="14" width="2" height="2"/><rect x="14" y="20" width="2" height="2"/><rect x="20" y="20" width="2" height="2"/></svg>
+                                二维码
+                            </button>
                         </div>
-                        <div id="qr-code" class="qr-code" style="display:none"></div>
+                        <div id="qr-code" class="qr-code" style="display:none" role="img" aria-label="连接码二维码"></div>
                     </div>
                     <div id="answer-input" style="display:none">
-                        <p>粘贴对方的回复连接码:</p>
-                        <textarea id="input-answer" rows="6"></textarea>
-                        <button id="btn-complete" class="btn primary">完成连接</button>
+                        <p style="font-size: var(--text-sm); color: var(--color-foreground-secondary); margin-bottom: 8px;">粘贴对方的回复连接码:</p>
+                        <label for="input-answer" class="sr-only">对方回复连接码</label>
+                        <textarea id="input-answer" rows="6" aria-label="对方回复连接码"></textarea>
+                        <button id="btn-complete" class="btn btn-primary" style="width:100%">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            完成连接
+                        </button>
                     </div>
                 </div>
 
                 <div id="chat-screen" class="chat-screen" style="display:none">
                     <div class="chat-header">
                         <div class="peer-info">
-                            <span class="peer-fingerprint" id="peer-fingerprint"></span>
-                            <span class="connection-status" id="connection-status">已连接</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="color: var(--color-accent)"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            <span class="peer-fingerprint" id="peer-fingerprint">已连接</span>
+                            <span class="connection-status" id="connection-status">在线</span>
                         </div>
                     </div>
-                    <div id="messages" class="messages"></div>
+                    <div id="messages" class="messages" role="log" aria-label="消息" aria-live="polite"></div>
                     <div class="input-area">
-                        <button id="btn-burn-toggle" class="btn icon" title="阅后即焚">⏱</button>
-                        <input type="text" id="msg-input" placeholder="输入消息..." autocomplete="off">
-                        <button id="btn-send" class="btn primary">发送</button>
+                        <button id="btn-burn-toggle" class="btn btn-icon btn-ghost" title="阅后即焚" aria-label="切换阅后即焚" aria-pressed="false">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>
+                        </button>
+                        <label for="msg-input" class="sr-only">输入消息</label>
+                        <input type="text" id="msg-input" placeholder="输入消息..." autocomplete="off" aria-label="消息输入">
+                        <button id="btn-send" class="btn btn-primary" aria-label="发送">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
                     </div>
-                    <div id="burn-settings" class="burn-settings" style="display:none">
+                    <div id="burn-settings" class="burn-settings" style="display:none" role="region" aria-label="阅后即焚设置">
                         <div class="burn-options">
-                            <label>
-                                <input type="radio" name="burn-mode" value="on_read" checked> 阅读后计时
-                            </label>
-                            <label>
-                                <input type="radio" name="burn-mode" value="on_send"> 发送后计时
-                            </label>
+                            <label><input type="radio" name="burn-mode" value="on_read" checked> 阅读后计时</label>
+                            <label><input type="radio" name="burn-mode" value="on_send"> 发送后计时</label>
                             <div class="duration-options">
-                                <label>时长:</label>
-                                <button class="btn small duration-btn" data-seconds="10">10s</button>
-                                <button class="btn small duration-btn active" data-seconds="30">30s</button>
-                                <button class="btn small duration-btn" data-seconds="60">60s</button>
-                                <input type="number" id="custom-duration" placeholder="自定义(秒)" min="1" max="3600">
+                                <span style="font-size: var(--text-xs); color: var(--color-foreground-muted);">时长:</span>
+                                <button class="btn btn-sm duration-btn" data-seconds="10">10s</button>
+                                <button class="btn btn-sm duration-btn active" data-seconds="30">30s</button>
+                                <button class="btn btn-sm duration-btn" data-seconds="60">60s</button>
+                                <label for="custom-duration" class="sr-only">自定义时长</label>
+                                <input type="number" id="custom-duration" placeholder="自定义" min="1" max="3600" aria-label="自定义秒数">
                             </div>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="burn-sender"> 发送方副本也消失
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="burn-revocable" checked> 允许撤销
-                            </label>
+                            <label class="checkbox-label"><input type="checkbox" id="burn-sender"> 发送方副本也消失</label>
+                            <label class="checkbox-label"><input type="checkbox" id="burn-revocable" checked> 允许撤销</label>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="settings-modal" class="modal" style="display:none">
+        <div id="settings-modal" class="modal" role="dialog" aria-label="设置" style="display:none">
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>设置</h3>
-                    <button id="btn-close-settings" class="btn icon">✕</button>
+                    <button id="btn-close-settings" class="btn btn-icon btn-ghost" aria-label="关闭设置">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
                 </div>
                 <div class="modal-body">
                     <div class="settings-section">
-                        <h4>网络设置 (NAT 穿透)</h4>
+                        <h4>网络设置</h4>
                         <div class="setting-group">
-                            <label>STUN 服务器:</label>
+                            <label for="stun-server">STUN 服务器</label>
                             <input type="text" id="stun-server" placeholder="stun:stun.l.google.com:19302" class="input-field">
                             <small>帮助 NAT 打洞，发现公网 IP</small>
                         </div>
                         <div class="setting-group">
-                            <label>TURN 服务器:</label>
+                            <label for="turn-server">TURN 服务器</label>
                             <input type="text" id="turn-server" placeholder="turn:your-server:3478" class="input-field">
                         </div>
                         <div class="setting-group">
-                            <label>TURN 用户名:</label>
+                            <label for="turn-username">TURN 用户名</label>
                             <input type="text" id="turn-username" placeholder="用户名" class="input-field">
                         </div>
                         <div class="setting-group">
-                            <label>TURN 密码:</label>
-                            <input type="password" id="turn-password" placeholder="密码" class="input-field">
+                            <label for="turn-password">TURN 密码</label>
+                            <input type="password" id="turn-password" placeholder="密码" class="input-field" autocomplete="off">
                         </div>
-                        <button id="btn-save-network" class="btn primary small">保存网络设置</button>
+                        <button id="btn-save-network" class="btn btn-primary btn-sm" style="width:100%">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            保存网络设置
+                        </button>
                     </div>
                     <div class="settings-section">
                         <h4>安全</h4>
-                        <button id="btn-change-password" class="btn secondary small">修改密码</button>
-                        <button id="btn-lock-now" class="btn secondary small">立即锁定</button>
-                    </div>
-                    <div class="settings-section">
-                        <h4>恢复短语</h4>
-                        <button id="btn-show-recovery" class="btn secondary small">查看恢复短语</button>
+                        <div style="display:flex; gap:8px;">
+                            <button id="btn-change-password" class="btn btn-secondary btn-sm" style="flex:1">修改密码</button>
+                            <button id="btn-lock-now" class="btn btn-ghost btn-sm" style="flex:1">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                立即锁定
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

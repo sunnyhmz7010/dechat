@@ -17,6 +17,59 @@ let hasPassword = false;
 let recoveryPhrase = null;
 let networkSettings = { stun: '', turn: '', turnUser: '', turnPass: '' };
 
+function showToast(message, type = 'info', duration = 3000) {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'polite');
+
+    const colors = {
+        info: 'var(--color-primary-light)',
+        success: 'var(--color-success)',
+        error: 'var(--color-destructive)',
+        warning: 'var(--color-warning)',
+    };
+
+    toast.style.cssText = `
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: var(--color-surface-raised); color: var(--color-foreground);
+        padding: 12px 20px; border-radius: 8px; font-size: 14px;
+        border: 1px solid var(--color-border); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 1000; animation: messageIn 200ms ease-out;
+        display: flex; align-items: center; gap: 8px; max-width: 400px;
+    `;
+
+    const dot = document.createElement('span');
+    dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; background: ${colors[type]}; flex-shrink: 0;`;
+    toast.appendChild(dot);
+
+    const text = document.createElement('span');
+    text.textContent = message;
+    toast.appendChild(text);
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'fadeIn 150ms ease-out reverse';
+        setTimeout(() => toast.remove(), 150);
+    }, duration);
+}
+
+function setButtonLoading(btn, loading) {
+    if (loading) {
+        btn.disabled = true;
+        btn._originalHTML = btn.innerHTML;
+        const spinner = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="loading"><circle cx="12" cy="12" r="10" stroke-dasharray="30 70"/></svg>';
+        btn.innerHTML = spinner + ' ' + btn.textContent.trim();
+    } else {
+        btn.disabled = false;
+        if (btn._originalHTML) btn.innerHTML = btn._originalHTML;
+    }
+}
+
 async function main() {
     await init();
     storage = new EncryptedStorage();
@@ -192,6 +245,9 @@ async function handleUnlock() {
     const pw = document.getElementById('lock-password').value;
     if (!pw) return;
 
+    const btn = document.getElementById('btn-unlock');
+    setButtonLoading(btn, true);
+
     try {
         await storage.deriveKeyFromPassword(pw);
         const fp = await storage.getSetting('fingerprint');
@@ -202,11 +258,14 @@ async function handleUnlock() {
             document.getElementById('lock-screen').style.display = 'none';
             document.getElementById('main-screen').style.display = 'flex';
             showConnectScreen();
+            showToast('已解锁', 'success');
         } else {
-            alert('密码错误或数据损坏');
+            showToast('密码错误或数据损坏', 'error');
         }
     } catch (e) {
-        alert('解锁失败: ' + e.message);
+        showToast('解锁失败: ' + e.message, 'error');
+    } finally {
+        setButtonLoading(btn, false);
     }
 }
 
@@ -255,9 +314,9 @@ function handleCreateOffer() {
 function handleCopyOffer() {
     const text = document.getElementById('output-offer').value;
     navigator.clipboard.writeText(text).then(() => {
-        const btn = document.getElementById('btn-copy-offer');
-        btn.textContent = '已复制!';
-        setTimeout(() => { btn.textContent = '复制'; }, 2000);
+        showToast('连接码已复制到剪贴板', 'success');
+    }).catch(() => {
+        showToast('复制失败，请手动复制', 'error');
     });
 }
 
@@ -293,8 +352,9 @@ function handleAcceptOffer() {
         document.getElementById('offer-output').style.display = 'block';
         document.getElementById('answer-input').style.display = 'none';
         setupWebRTCPeer(false);
+        showToast('连接码已生成，请发送给对方', 'success');
     } catch (e) {
-        alert('连接码无效: ' + e);
+        showToast('连接码无效: ' + e, 'error');
     }
 }
 
@@ -306,8 +366,9 @@ function handleComplete() {
         engine.complete_handshake(answerJson);
         setupWebRTCPeer(true);
         enterChatScreen();
+        showToast('加密连接已建立', 'success');
     } catch (e) {
-        alert('连接码无效: ' + e);
+        showToast('连接码无效: ' + e, 'error');
     }
 }
 
@@ -412,13 +473,18 @@ function onMessageReceived(payloadJson) {
 }
 
 function onConnected() {
-    document.getElementById('connection-status').textContent = '已连接';
-    document.getElementById('connection-status').style.background = 'var(--success)';
+    const status = document.getElementById('connection-status');
+    status.textContent = '在线';
+    status.style.background = 'var(--color-accent-dim)';
+    status.style.color = 'var(--color-accent)';
 }
 
 function onDisconnected() {
-    document.getElementById('connection-status').textContent = '已断开';
-    document.getElementById('connection-status').style.background = 'var(--danger)';
+    const status = document.getElementById('connection-status');
+    status.textContent = '离线';
+    status.style.background = 'var(--color-destructive-dim)';
+    status.style.color = 'var(--color-destructive)';
+    showToast('连接已断开', 'warning');
 }
 
 function addMessageToUI(payload, isSelf, isBurn) {
@@ -512,7 +578,7 @@ async function handleSaveNetwork() {
         turnPass: document.getElementById('turn-password').value.trim(),
     };
     await storage.saveSetting('network', networkSettings);
-    alert('网络设置已保存');
+    showToast('网络设置已保存', 'success');
 }
 
 function handleLockNow() {
@@ -530,14 +596,14 @@ async function handlePanic() {
 
     if (engine) engine.destroy();
     if (storage) await storage.destroy();
-
     localStorage.clear();
 
     document.body.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:20px;">
-            <h1 style="color:#f85149;font-size:48px;">数据已销毁</h1>
-            <p style="color:#8b949e;">所有密钥和消息已永久删除</p>
-            <button onclick="location.reload()" style="padding:12px 24px;background:#58a6ff;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:16px;">重新开始</button>
+        <div style="display:flex;align-items:center;justify-content:center;height:100dvh;flex-direction:column;gap:24px;background:var(--color-background);">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--color-destructive)" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <h1 style="color:var(--color-foreground);font-size:2rem;font-weight:700;">数据已销毁</h1>
+            <p style="color:var(--color-foreground-secondary);font-size:0.875rem;">所有密钥和消息已永久删除</p>
+            <button onclick="location.reload()" class="btn btn-primary" style="padding:12px 24px;font-size:1rem;">重新开始</button>
         </div>
     `;
 }
