@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeChat - 去中心化加密聊天</title>
     <meta name="description" content="零服务器端到端加密聊天，Signal Protocol 保护您的隐私">
+    <meta name="theme-color" content="#0F172A">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>">
 </head>
 <body>
@@ -177,11 +179,16 @@
                             <span class="connection-status" id="connection-status">在线</span>
                         </div>
                     </div>
+                    <div id="typing-indicator" class="typing-indicator" style="display:none" aria-live="polite">对方正在输入...</div>
                     <div id="messages" class="messages" role="log" aria-label="消息" aria-live="polite"></div>
                     <div class="input-area">
                         <button id="btn-burn-toggle" class="btn btn-icon btn-ghost" title="阅后即焚" aria-label="切换阅后即焚" aria-pressed="false">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>
                         </button>
+                        <button id="btn-file" class="btn btn-icon btn-ghost" title="发送文件" aria-label="发送文件">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </button>
+                        <input type="file" id="file-input" style="display:none" aria-hidden="true">
                         <label for="msg-input" class="sr-only">输入消息</label>
                         <input type="text" id="msg-input" placeholder="输入消息..." autocomplete="off" aria-label="消息输入">
                         <button id="btn-send" class="btn btn-primary" aria-label="发送">
@@ -257,5 +264,10 @@
     </div>
     <script src="js/qrcode.min.js"></script>
     <script type="module" src="js/app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
 </body>
 </html>

@@ -225,6 +225,9 @@ async function main() {
     }
 
     setupEventListeners();
+    setupFileTransfer();
+    setupTypingIndicator();
+    setupNotifications();
 }
 
 function showLockScreen() {
@@ -661,6 +664,8 @@ async function handleSend() {
 }
 
 function onMessageReceived(data) {
+    if (handleProtocolMessage(data)) return;
+
     try {
         const msg = JSON.parse(data);
         const payload = JSON.parse(msg.payload);
@@ -679,6 +684,9 @@ function onMessageReceived(data) {
         if (isBurn && payload.burn.mode === 'on_read') {
             engine.trigger_read(payload.id);
         }
+
+        sendDeliveredReceipt(payload.id);
+        showBrowserNotification('新消息', displayPayload.kind === 'file' ? '📎 文件' : displayContent.substring(0, 50));
 
         const session = sessions.get(currentSessionId);
         if (session) {
@@ -700,7 +708,7 @@ function onMessageReceived(data) {
                 content: displayContent,
                 fromSelf: false,
                 timestamp: payload.ts,
-                kind: 'text',
+                kind: payload.kind || 'text',
             });
         }
     } catch (e) {
@@ -977,6 +985,153 @@ class SimpleP2P {
     close() {
         if (this.channel) this.channel.close();
         if (this.pc) this.pc.close();
+    }
+}
+
+// ── File Transfer ──
+function setupFileTransfer() {
+    const btnFile = document.getElementById('btn-file');
+    const fileInput = document.getElementById('file-input');
+
+    if (btnFile && fileInput) {
+        btnFile.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+    }
+}
+
+async function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+        showToast('文件大小不能超过 10MB', 'error');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+        const arrayBuffer = reader.result;
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+        let burnJson = '';
+        if (burnEnabled) {
+            burnJson = JSON.stringify({
+                mode: burnMode,
+                duration_secs: burnDuration,
+                burn_sender_copy: burnSender,
+                revocable: burnRevocable,
+            });
+        }
+
+        try {
+            const result = engine.encrypt_message(base64, burnJson);
+            const resultObj = JSON.parse(result);
+            const payload = JSON.parse(resultObj.payload);
+            payload.kind = 'file';
+            payload.filename = file.name;
+            payload.mime_type = file.type;
+            payload.size = file.size;
+
+            const sendObj = { ...resultObj, payload: JSON.stringify(payload) };
+
+            if (connection && connection.isConnected) {
+                connection.sendMessage(JSON.stringify(sendObj));
+            }
+
+            addMessageToUI(payload, true, burnEnabled);
+            e.target.value = '';
+
+            const session = sessions.get(currentSessionId);
+            if (session) {
+                session.messages.push({ payload, fromSelf: true, isBurn: burnEnabled });
+                session.lastActivity = Date.now();
+            }
+        } catch (err) {
+            showToast('文件发送失败: ' + err.message, 'error');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// ── Typing Indicator ──
+let typingTimeout = null;
+let lastTypingSent = 0;
+
+function setupTypingIndicator() {
+    const input = document.getElementById('msg-input');
+    if (!input) return;
+
+    input.addEventListener('input', () => {
+        const now = Date.now();
+        if (now - lastTypingSent > 2000 && connection && connection.isConnected) {
+            connection.sendMessage(JSON.stringify({ type: 'typing', isTyping: true }));
+            lastTypingSent = now;
+        }
+
+        if (typingTimeout) clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            if (connection && connection.isConnected) {
+                connection.sendMessage(JSON.stringify({ type: 'typing', isTyping: false }));
+            }
+        }, 3000);
+    });
+}
+
+function showTypingIndicator(show) {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.style.display = show ? 'block' : 'none';
+}
+
+// ── Read Receipts ──
+function sendReadReceipt(msgId) {
+    if (connection && connection.isConnected) {
+        connection.sendMessage(JSON.stringify({ type: 'receipt', msgId, status: 'read' }));
+    }
+}
+
+function sendDeliveredReceipt(msgId) {
+    if (connection && connection.isConnected) {
+        connection.sendMessage(JSON.stringify({ type: 'receipt', msgId, status: 'delivered' }));
+    }
+}
+
+// ── Browser Notifications ──
+function setupNotifications() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+function showBrowserNotification(title, body) {
+    if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+        new Notification(title, { body, icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🔒</text></svg>' });
+    }
+}
+
+// ── Handle Protocol Messages ──
+function handleProtocolMessage(data) {
+    try {
+        const msg = JSON.parse(data);
+
+        if (msg.type === 'typing') {
+            showTypingIndicator(msg.isTyping);
+            return true;
+        }
+
+        if (msg.type === 'receipt') {
+            if (msg.status === 'read') {
+                const el = document.querySelector(`[data-msg-id="${msg.msgId}"] .msg-status`);
+                if (el) {
+                    el.textContent = '✓✓';
+                    el.style.color = 'var(--color-primary-light)';
+                }
+            }
+            return true;
+        }
+
+        return false;
+    } catch {
+        return false;
     }
 }
 

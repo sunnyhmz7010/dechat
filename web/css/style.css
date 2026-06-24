@@ -612,6 +612,14 @@ textarea.input-field {
     flex-direction: column;
 }
 
+.typing-indicator {
+    padding: var(--space-1) var(--space-5);
+    font-size: var(--text-xs);
+    color: var(--color-foreground-muted);
+    font-style: italic;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
 .chat-header {
     padding: var(--space-3) var(--space-5);
     background: var(--color-surface);
