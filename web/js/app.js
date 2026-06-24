@@ -582,7 +582,14 @@ function enterChatScreen() {
     document.getElementById('connect-screen').style.display = 'none';
     document.getElementById('chat-screen').style.display = 'flex';
     document.getElementById('peer-fingerprint').textContent = '已连接';
-    document.getElementById('connection-status').textContent = '在线';
+
+    const status = document.getElementById('connection-status');
+    status.textContent = '等待连接...';
+    status.style.background = 'var(--color-warning-dim)';
+    status.style.color = 'var(--color-warning)';
+
+    const session = sessions.get(currentSessionId);
+    if (session) renderSessionList();
 
     const mobileHeader = document.getElementById('mobile-header');
     if (mobileHeader && window.innerWidth <= 768) {
@@ -595,18 +602,23 @@ function enterChatScreen() {
     if (overlay) overlay.classList.remove('active');
 
     tickInterval = setInterval(() => {
-        const expired = engine.tick();
-        if (expired && expired.length > 0) {
-            expired.forEach(id => {
-                const el = document.querySelector(`[data-msg-id="${id}"]`);
-                if (el) {
-                    el.classList.add('burning');
-                    setTimeout(() => {
-                        el.classList.remove('burning');
-                        el.classList.add('expired');
-                        el.innerHTML = '[消息已焚毁]';
-                    }, 1500);
-                }
+        try {
+            const expiredJson = engine.tick();
+            const expired = JSON.parse(expiredJson);
+            if (expired && expired.length > 0) {
+                expired.forEach(id => {
+                    const el = document.querySelector(`[data-msg-id="${id}"]`);
+                    if (el) {
+                        el.classList.add('burning');
+                        setTimeout(() => {
+                            el.classList.remove('burning');
+                            el.classList.add('expired');
+                            el.innerHTML = '[消息已焚毁]';
+                        }, 1500);
+                    }
+                });
+            }
+        } catch (e) { /* ignore tick errors */ }
             });
         }
     }, 1000);
@@ -721,6 +733,12 @@ function onConnected() {
     status.textContent = '在线';
     status.style.background = 'var(--color-accent-dim)';
     status.style.color = 'var(--color-accent)';
+
+    const session = sessions.get(currentSessionId);
+    if (session) {
+        session.peerName = session.peerName === '新连接' ? '已连接' : session.peerName;
+        renderSessionList();
+    }
 }
 
 function onDisconnected() {
@@ -729,6 +747,7 @@ function onDisconnected() {
     status.style.background = 'var(--color-destructive-dim)';
     status.style.color = 'var(--color-destructive)';
     showToast('连接已断开', 'warning');
+    renderSessionList();
 }
 
 function addMessageToUI(payload, isSelf, isBurn) {

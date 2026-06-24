@@ -92,33 +92,33 @@ impl DechatEngine {
         Ok(String::from_utf8_lossy(&msg.content).to_string())
     }
 
-    pub fn tick(&mut self) -> JsValue {
+    pub fn tick(&mut self) -> String {
         let session = self.session.as_mut().unwrap();
         let expired = session.tick_all();
-        serde_wasm_bindgen::to_value(&expired).unwrap()
+        serde_json::to_string(&expired).unwrap_or_default()
     }
 
-    pub fn trigger_read(&mut self, msg_id: &str) -> JsValue {
+    pub fn trigger_read(&mut self, msg_id: &str) -> String {
         let session = self.session.as_mut().unwrap();
         let notification = session.trigger_read(msg_id);
-        serde_wasm_bindgen::to_value(&notification).unwrap()
+        serde_json::to_string(&notification).unwrap_or_default()
     }
 
-    pub fn trigger_action(&mut self, msg_id: &str) -> JsValue {
+    pub fn trigger_action(&mut self, msg_id: &str) -> String {
         let session = self.session.as_mut().unwrap();
         let notification = session.trigger_action(msg_id);
-        serde_wasm_bindgen::to_value(&notification).unwrap()
+        serde_json::to_string(&notification).unwrap_or_default()
     }
 
-    pub fn revoke_burn(&mut self, msg_id: &str) -> JsValue {
+    pub fn revoke_burn(&mut self, msg_id: &str) -> String {
         let session = self.session.as_mut().unwrap();
         let notification = session.revoke_burn(msg_id);
-        serde_wasm_bindgen::to_value(&notification).unwrap()
+        serde_json::to_string(&notification).unwrap_or_default()
     }
 
-    pub fn get_messages(&self) -> JsValue {
+    pub fn get_messages(&self) -> String {
         let session = self.session.as_ref().unwrap();
-        serde_wasm_bindgen::to_value(&session.messages).unwrap()
+        serde_json::to_string(&session.messages).unwrap_or_default()
     }
 
     pub fn is_connected(&self) -> bool {
