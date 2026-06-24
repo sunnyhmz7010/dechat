@@ -471,6 +471,32 @@ textarea.input-field {
     min-width: 0;
 }
 
+.mobile-only {
+    display: none !important;
+}
+
+.sidebar-overlay {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-only {
+        display: flex !important;
+    }
+
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: calc(var(--z-modal) - 1);
+    }
+
+    .sidebar-overlay.active {
+        display: block;
+    }
+}
+
 .connect-screen {
     flex: 1;
     display: flex;
@@ -981,7 +1007,54 @@ textarea.input-field {
     }
 
     .connect-screen {
-        padding: var(--space-6);
+        padding: var(--space-4);
+        justify-content: flex-start;
+        overflow-y: auto;
+        gap: var(--space-4);
+    }
+
+    .connect-screen h3 {
+        font-size: var(--text-xl);
+        margin-top: var(--space-2);
+    }
+
+    .connect-screen > svg {
+        display: none;
+    }
+
+    .connect-screen p {
+        font-size: var(--text-sm);
+    }
+
+    .connect-actions {
+        gap: var(--space-3);
+    }
+
+    .connect-actions textarea {
+        font-size: 11px;
+        min-height: 60px;
+    }
+
+    #offer-output, #answer-input {
+        max-width: 100%;
+    }
+
+    #offer-output textarea, #answer-input textarea {
+        font-size: 10px;
+        min-height: 80px;
+        max-height: 200px;
+        overflow-y: auto;
+        word-break: break-all;
+        white-space: pre-wrap;
+    }
+
+    .qr-code {
+        padding: var(--space-3);
+    }
+
+    .qr-code svg {
+        max-width: 200px;
+        height: auto;
     }
 
     .messages {
@@ -989,17 +1062,58 @@ textarea.input-field {
     }
 
     .message {
-        max-width: 85%;
+        max-width: 88%;
     }
 
     .input-area {
         padding: var(--space-2) var(--space-3);
+    }
+
+    .chat-header {
+        padding: var(--space-2) var(--space-3);
+    }
+
+    .modal-content {
+        width: 95vw;
+        max-height: 90dvh;
+        border-radius: var(--radius-lg);
+    }
+
+    .modal-body {
+        padding: var(--space-4);
+    }
+
+    .burn-settings {
+        padding: var(--space-3) var(--space-4);
     }
 }
 
 @media (max-width: 480px) {
     .setup-container,
     .lock-container {
-        padding: var(--space-6);
+        padding: var(--space-4);
+        gap: var(--space-3);
+    }
+
+    .setup-container h1,
+    .lock-container h1 {
+        font-size: var(--text-2xl);
+    }
+
+    .connect-screen {
+        padding: var(--space-3);
+    }
+
+    #offer-output textarea, #answer-input textarea {
+        font-size: 10px;
+        min-height: 100px;
+    }
+
+    .sidebar-header {
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .sidebar-footer {
+        padding: var(--space-2) var(--space-4);
     }
 }

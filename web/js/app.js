@@ -122,6 +122,11 @@ function setupEventListeners() {
     document.getElementById('btn-panic').addEventListener('click', handlePanic);
     document.getElementById('btn-burn-toggle').addEventListener('click', toggleBurnSettings);
 
+    const btnMenu = document.getElementById('btn-menu');
+    if (btnMenu) {
+        btnMenu.addEventListener('click', toggleSidebar);
+    }
+
     document.getElementById('btn-settings').addEventListener('click', () => {
         document.getElementById('settings-modal').style.display = 'flex';
         document.getElementById('stun-server').value = networkSettings.stun;
@@ -397,8 +402,18 @@ function setupWebRTCPeer(isInitiator) {
 function enterChatScreen() {
     document.getElementById('connect-screen').style.display = 'none';
     document.getElementById('chat-screen').style.display = 'flex';
-    document.getElementById('peer-fingerprint').textContent = '对方指纹: 已连接';
-    document.getElementById('connection-status').textContent = '已连接';
+    document.getElementById('peer-fingerprint').textContent = '已连接';
+    document.getElementById('connection-status').textContent = '在线';
+
+    const mobileHeader = document.getElementById('mobile-header');
+    if (mobileHeader && window.innerWidth <= 768) {
+        mobileHeader.style.display = 'flex';
+    }
+
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.remove('open');
+    const overlay = document.querySelector('.sidebar-overlay');
+    if (overlay) overlay.classList.remove('active');
 
     tickInterval = setInterval(() => {
         const expired = engine.tick();
@@ -568,6 +583,27 @@ function toggleBurnSettings() {
     const panel = document.getElementById('burn-settings');
     burnEnabled = !burnEnabled;
     panel.style.display = burnEnabled ? 'block' : 'none';
+    document.getElementById('btn-burn-toggle').setAttribute('aria-pressed', burnEnabled);
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+
+    if (sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('active');
+    } else {
+        sidebar.classList.add('open');
+        if (!overlay) {
+            const div = document.createElement('div');
+            div.className = 'sidebar-overlay active';
+            div.addEventListener('click', toggleSidebar);
+            document.getElementById('main-screen').appendChild(div);
+        } else {
+            overlay.classList.add('active');
+        }
+    }
 }
 
 async function handleSaveNetwork() {
