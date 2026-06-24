@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/dechat-core", "crates/dechat-wasm"]
+resolver = "2"

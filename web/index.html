@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeChat - 去中心化加密聊天</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="lock-screen" class="screen" style="display:none">
+            <div class="lock-container">
+                <h1>DeChat</h1>
+                <p class="subtitle">输入密码解锁</p>
+                <input type="password" id="lock-password" placeholder="密码" class="input-field">
+                <button id="btn-unlock" class="btn primary">解锁</button>
+                <button id="btn-use-recovery" class="btn secondary small">使用恢复短语</button>
+                <div id="recovery-section" style="display:none">
+                    <textarea id="recovery-phrase-input" placeholder="输入恢复短语..." rows="3" class="input-field"></textarea>
+                    <button id="btn-recover" class="btn secondary">恢复</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="setup-screen" class="screen">
+            <div class="setup-container">
+                <h1>DeChat</h1>
+                <p class="subtitle">去中心化端到端加密聊天</p>
+                <div id="identity-info" style="display:none">
+                    <p>你的身份指纹:</p>
+                    <code id="fingerprint"></code>
+                </div>
+                <div class="setup-options">
+                    <button id="btn-init" class="btn primary">直接开始</button>
+                    <div class="divider">或</div>
+                    <button id="btn-init-password" class="btn secondary">设置密码保护</button>
+                </div>
+                <div id="password-setup" style="display:none">
+                    <input type="password" id="new-password" placeholder="设置密码" class="input-field">
+                    <input type="password" id="confirm-password" placeholder="确认密码" class="input-field">
+                    <button id="btn-confirm-password" class="btn primary">确认</button>
+                </div>
+                <div id="recovery-phrase-display" style="display:none">
+                    <p>请妥善保管恢复短语 (丢失密码后可用):</p>
+                    <div id="recovery-words" class="recovery-words"></div>
+                    <button id="btn-copy-recovery" class="btn small">复制</button>
+                    <button id="btn-confirm-recovery" class="btn primary">我已保存</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-screen" class="screen" style="display:none">
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h2>DeChat</h2>
+                    <div class="sidebar-actions">
+                        <button id="btn-settings" class="btn icon" title="设置">⚙</button>
+                        <button id="btn-new-chat" class="btn small">新建连接</button>
+                    </div>
+                </div>
+                <div id="session-list" class="session-list"></div>
+                <div class="sidebar-footer">
+                    <div class="fingerprint-display">
+                        <span class="label">我的指纹:</span>
+                        <code id="my-fingerprint"></code>
+                    </div>
+                    <button id="btn-panic" class="btn danger small" title="按 Esc 3 次也可触发">销毁</button>
+                </div>
+            </div>
+
+            <div class="chat-area">
+                <div id="connect-screen" class="connect-screen">
+                    <h3>开始聊天</h3>
+                    <p>点击"新建连接"生成连接码，或粘贴对方的连接码</p>
+                    <div class="connect-actions">
+                        <button id="btn-create-offer" class="btn primary">生成连接码</button>
+                        <div class="divider">或</div>
+                        <textarea id="input-offer" placeholder="粘贴对方的连接码..." rows="4"></textarea>
+                        <button id="btn-accept-offer" class="btn secondary">接受连接</button>
+                    </div>
+                    <div id="offer-output" style="display:none">
+                        <p>你的连接码 (发送给对方):</p>
+                        <textarea id="output-offer" readonly rows="6"></textarea>
+                        <div class="offer-actions">
+                            <button id="btn-copy-offer" class="btn small">复制</button>
+                            <button id="btn-show-qr" class="btn small">显示二维码</button>
+                        </div>
+                        <div id="qr-code" class="qr-code" style="display:none"></div>
+                    </div>
+                    <div id="answer-input" style="display:none">
+                        <p>粘贴对方的回复连接码:</p>
+                        <textarea id="input-answer" rows="6"></textarea>
+                        <button id="btn-complete" class="btn primary">完成连接</button>
+                    </div>
+                </div>
+
+                <div id="chat-screen" class="chat-screen" style="display:none">
+                    <div class="chat-header">
+                        <div class="peer-info">
+                            <span class="peer-fingerprint" id="peer-fingerprint"></span>
+                            <span class="connection-status" id="connection-status">已连接</span>
+                        </div>
+                    </div>
+                    <div id="messages" class="messages"></div>
+                    <div class="input-area">
+                        <button id="btn-burn-toggle" class="btn icon" title="阅后即焚">⏱</button>
+                        <input type="text" id="msg-input" placeholder="输入消息..." autocomplete="off">
+                        <button id="btn-send" class="btn primary">发送</button>
+                    </div>
+                    <div id="burn-settings" class="burn-settings" style="display:none">
+                        <div class="burn-options">
+                            <label>
+                                <input type="radio" name="burn-mode" value="on_read" checked> 阅读后计时
+                            </label>
+                            <label>
+                                <input type="radio" name="burn-mode" value="on_send"> 发送后计时
+                            </label>
+                            <div class="duration-options">
+                                <label>时长:</label>
+                                <button class="btn small duration-btn" data-seconds="10">10s</button>
+                                <button class="btn small duration-btn active" data-seconds="30">30s</button>
+                                <button class="btn small duration-btn" data-seconds="60">60s</button>
+                                <input type="number" id="custom-duration" placeholder="自定义(秒)" min="1" max="3600">
+                            </div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="burn-sender"> 发送方副本也消失
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="burn-revocable" checked> 允许撤销
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settings-modal" class="modal" style="display:none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>设置</h3>
+                    <button id="btn-close-settings" class="btn icon">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h4>网络设置 (NAT 穿透)</h4>
+                        <div class="setting-group">
+                            <label>STUN 服务器:</label>
+                            <input type="text" id="stun-server" placeholder="stun:stun.l.google.com:19302" class="input-field">
+                            <small>帮助 NAT 打洞，发现公网 IP</small>
+                        </div>
+                        <div class="setting-group">
+                            <label>TURN 服务器:</label>
+                            <input type="text" id="turn-server" placeholder="turn:your-server:3478" class="input-field">
+                        </div>
+                        <div class="setting-group">
+                            <label>TURN 用户名:</label>
+                            <input type="text" id="turn-username" placeholder="用户名" class="input-field">
+                        </div>
+                        <div class="setting-group">
+                            <label>TURN 密码:</label>
+                            <input type="password" id="turn-password" placeholder="密码" class="input-field">
+                        </div>
+                        <button id="btn-save-network" class="btn primary small">保存网络设置</button>
+                    </div>
+                    <div class="settings-section">
+                        <h4>安全</h4>
+                        <button id="btn-change-password" class="btn secondary small">修改密码</button>
+                        <button id="btn-lock-now" class="btn secondary small">立即锁定</button>
+                    </div>
+                    <div class="settings-section">
+                        <h4>恢复短语</h4>
+                        <button id="btn-show-recovery" class="btn secondary small">查看恢复短语</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="js/qrcode.min.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
