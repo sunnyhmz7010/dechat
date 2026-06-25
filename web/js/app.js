@@ -908,8 +908,14 @@ async function handlePanic() {
     `;
 }
 
+const RTC = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+
 class SimpleP2P {
     constructor(rtcConfig, onMessage, onConnect, onDisconnect) {
+        if (!RTC) {
+            throw new Error('WebRTC 不可用，请使用现代浏览器并确保通过 HTTPS 访问');
+        }
+
         this.onMessage = onMessage;
         this.onConnect = onConnect;
         this.onDisconnect = onDisconnect;
@@ -917,7 +923,7 @@ class SimpleP2P {
         this.pc = null;
         this.channel = null;
 
-        this.pc = new RTCPeerConnection(rtcConfig);
+        this.pc = new RTC(rtcConfig);
 
         this.pc.oniceconnectionstatechange = () => {
             if (this.pc.iceConnectionState === 'connected') {
