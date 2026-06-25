@@ -6,160 +6,146 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct DechatEngine {
-    session: Option<Rc<RefCell<Session>>>,
+    session: Rc<RefCell<Option<Session>>>,
 }
 
 #[wasm_bindgen]
 impl DechatEngine {
     #[wasm_bindgen(constructor)]
     pub fn new() -> DechatEngine {
-        DechatEngine { session: None }
+        DechatEngine {
+            session: Rc::new(RefCell::new(None)),
+        }
     }
 
-    pub fn init(&mut self) -> String {
+    pub fn init(&self) -> String {
         let session = Session::new();
         let fp = dechat_core::keys::fingerprint(&session.identity.public);
-        self.session = Some(Rc::new(RefCell::new(session)));
+        *self.session.borrow_mut() = Some(session);
         format!("{{\"fingerprint\":\"{}\",\"status\":\"initialized\"}}", fp)
     }
 
-    pub fn create_offer(&self, sdp: &str, candidates_json: &str) -> Result<String, JsValue> {
-        let session = self.session.as_ref().ok_or("not initialized")?;
+    pub fn create_offer(&self, sdp: &str, candidates_json: &str) -> Result<String, String> {
         let candidates: Vec<ICECandidate> =
-            serde_json::from_str(candidates_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let s = session.borrow();
-        let offer = s
-            .create_offer(sdp, candidates)
-            .map_err(|e| JsValue::from_str(&e))?;
+            serde_json::from_str(candidates_json).map_err(|e| e.to_string())?;
+        let mut guard = self.session.borrow_mut();
+        let session = guard.as_mut().ok_or("not initialized")?;
+        let offer = session.create_offer(sdp, candidates)?;
         Ok(offer.json)
     }
 
     pub fn create_answer(
-        &mut self,
+        &self,
         offer_json: &str,
         sdp: &str,
         candidates_json: &str,
-    ) -> Result<String, JsValue> {
-        let session = self.session.as_ref().ok_or("not initialized")?;
+    ) -> Result<String, String> {
         let candidates: Vec<ICECandidate> =
-            serde_json::from_str(candidates_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let mut s = session.borrow_mut();
-        let answer = s
-            .create_answer(offer_json, sdp, candidates)
-            .map_err(|e| JsValue::from_str(&e))?;
+            serde_json::from_str(candidates_json).map_err(|e| e.to_string())?;
+        let mut guard = self.session.borrow_mut();
+        let session = guard.as_mut().ok_or("not initialized")?;
+        let answer = session.create_answer(offer_json, sdp, candidates)?;
         Ok(answer.json)
     }
 
-    pub fn complete_handshake(&mut self, answer_json: &str) -> Result<(), JsValue> {
-        let session = self.session.as_ref().ok_or("not initialized")?;
-        let mut s = session.borrow_mut();
-        s.complete_handshake(answer_json)
-            .map_err(|e| JsValue::from_str(&e))?;
+    pub fn complete_handshake(&self, answer_json: &str) -> Result<(), String> {
+        let mut guard = self.session.borrow_mut();
+        let session = guard.as_mut().ok_or("not initialized")?;
+        session.complete_handshake(answer_json)?;
         Ok(())
     }
 
-    pub fn encrypt_message(&mut self, plaintext: &str, burn_json: &str) -> Result<String, JsValue> {
-        let session = self.session.as_ref().ok_or("not initialized")?;
+    pub fn encrypt_message(&self, plaintext: &str, burn_json: &str) -> Result<String, String> {
         let burn: Option<BurnConfig> = if burn_json.is_empty() {
             None
         } else {
-            Some(
-                serde_json::from_str(burn_json)
-                    .map_err(|e| JsValue::from_str(&e.to_string()))?,
-            )
+            Some(serde_json::from_str(burn_json).map_err(|e| e.to_string())?)
         };
-        let mut s = session.borrow_mut();
-        let result = s.encrypt_message(plaintext.as_bytes(), burn);
-        match result {
-            Ok((payload_json, wire_bytes)) => {
-                let wire_json = String::from_utf8_lossy(&wire_bytes);
-                Ok(format!("{{\"wire\":{},\"payload\":{}}}", wire_json, payload_json))
-            }
-            Err(e) => Err(JsValue::from_str(&e))
-        }
+        let mut guard = self.session.borrow_mut();
+        let session = guard.as_mut().ok_or("not initialized")?;
+        let (payload_json, wire_bytes) = session.encrypt_message(plaintext.as_bytes(), burn)?;
+        let wire_json = String::from_utf8_lossy(&wire_bytes);
+        Ok(format!("{{\"wire\":{},\"payload\":{}}}", wire_json, payload_json))
     }
 
     pub fn decrypt_message(
-        &mut self,
+        &self,
         wire_json: &str,
         payload_json: &str,
-    ) -> Result<String, JsValue> {
-        let session = self.session.as_ref().ok_or("not initialized")?;
-        let mut s = session.borrow_mut();
-        let msg = s
-            .decrypt_message(wire_json, payload_json)
-            .map_err(|e| JsValue::from_str(&e))?;
+    ) -> Result<String, String> {
+        let mut guard = self.session.borrow_mut();
+        let session = guard.as_mut().ok_or("not initialized")?;
+        let msg = session.decrypt_message(wire_json, payload_json)?;
         Ok(String::from_utf8_lossy(&msg.content).to_string())
     }
 
-    pub fn tick(&mut self) -> String {
-        let session = match self.session.as_ref() {
-            Some(s) => s,
-            None => return "[]".to_string(),
-        };
-        let mut s = session.borrow_mut();
-        let expired = s.tick_all();
-        serde_json::to_string(&expired).unwrap_or_else(|_| "[]".to_string())
+    pub fn tick(&self) -> String {
+        let mut guard = self.session.borrow_mut();
+        if let Some(ref mut session) = *guard {
+            let expired = session.tick_all();
+            serde_json::to_string(&expired).unwrap_or_else(|_| "[]".to_string())
+        } else {
+            "[]".to_string()
+        }
     }
 
-    pub fn trigger_read(&mut self, msg_id: &str) -> String {
-        let session = match self.session.as_ref() {
-            Some(s) => s,
-            None => return "null".to_string(),
-        };
-        let mut s = session.borrow_mut();
-        let notification = s.trigger_read(msg_id);
-        serde_json::to_string(&notification).unwrap_or_else(|_| "null".to_string())
+    pub fn trigger_read(&self, msg_id: &str) -> String {
+        let mut guard = self.session.borrow_mut();
+        if let Some(ref mut session) = *guard {
+            let notification = session.trigger_read(msg_id);
+            serde_json::to_string(&notification).unwrap_or_else(|_| "null".to_string())
+        } else {
+            "null".to_string()
+        }
     }
 
-    pub fn trigger_action(&mut self, msg_id: &str) -> String {
-        let session = match self.session.as_ref() {
-            Some(s) => s,
-            None => return "null".to_string(),
-        };
-        let mut s = session.borrow_mut();
-        let notification = s.trigger_action(msg_id);
-        serde_json::to_string(&notification).unwrap_or_else(|_| "null".to_string())
+    pub fn trigger_action(&self, msg_id: &str) -> String {
+        let mut guard = self.session.borrow_mut();
+        if let Some(ref mut session) = *guard {
+            let notification = session.trigger_action(msg_id);
+            serde_json::to_string(&notification).unwrap_or_else(|_| "null".to_string())
+        } else {
+            "null".to_string()
+        }
     }
 
-    pub fn revoke_burn(&mut self, msg_id: &str) -> String {
-        let session = match self.session.as_ref() {
-            Some(s) => s,
-            None => return "null".to_string(),
-        };
-        let mut s = session.borrow_mut();
-        let notification = s.revoke_burn(msg_id);
-        serde_json::to_string(&notification).unwrap_or_else(|_| "null".to_string())
+    pub fn revoke_burn(&self, msg_id: &str) -> String {
+        let mut guard = self.session.borrow_mut();
+        if let Some(ref mut session) = *guard {
+            let notification = session.revoke_burn(msg_id);
+            serde_json::to_string(&notification).unwrap_or_else(|_| "null".to_string())
+        } else {
+            "null".to_string()
+        }
     }
 
     pub fn get_messages(&self) -> String {
-        let session = match self.session.as_ref() {
-            Some(s) => s,
-            None => return "[]".to_string(),
-        };
-        let s = session.borrow();
-        serde_json::to_string(&s.messages).unwrap_or_else(|_| "[]".to_string())
+        let guard = self.session.borrow();
+        if let Some(ref session) = *guard {
+            serde_json::to_string(&session.messages).unwrap_or_else(|_| "[]".to_string())
+        } else {
+            "[]".to_string()
+        }
     }
 
     pub fn is_connected(&self) -> bool {
-        self.session
-            .as_ref()
-            .map(|s| s.borrow().is_connected())
-            .unwrap_or(false)
+        let guard = self.session.borrow();
+        guard.as_ref().map_or(false, |s| s.is_connected())
     }
 
     pub fn get_fingerprint(&self) -> String {
-        let session = match self.session.as_ref() {
-            Some(s) => s,
-            None => return String::new(),
-        };
-        let s = session.borrow();
-        dechat_core::keys::fingerprint(&s.identity.public)
+        let guard = self.session.borrow();
+        guard
+            .as_ref()
+            .map(|s| dechat_core::keys::fingerprint(&s.identity.public))
+            .unwrap_or_default()
     }
 
-    pub fn destroy(&mut self) {
-        if let Some(session) = self.session.take() {
-            session.borrow_mut().destroy();
+    pub fn destroy(&self) {
+        let mut guard = self.session.borrow_mut();
+        if let Some(ref mut session) = *guard {
+            session.destroy();
         }
+        *guard = None;
     }
 }

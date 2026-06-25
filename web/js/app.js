@@ -591,17 +591,13 @@ function getRTCConfig() {
     return { iceServers };
 }
 
-function setupWebRTCPeer(isInitiator) {
-    connection = new SimpleP2P(isInitiator, getRTCConfig(), onMessageReceived, onConnected, onDisconnected);
-}
-
 function enterChatScreen() {
     document.getElementById('connect-screen').style.display = 'none';
     document.getElementById('chat-screen').style.display = 'flex';
     document.getElementById('peer-fingerprint').textContent = '已连接';
 
     const status = document.getElementById('connection-status');
-    status.textContent = '等待连接...';
+    status.textContent = '连接中...';
     status.style.background = 'var(--color-warning-dim)';
     status.style.color = 'var(--color-warning)';
 
@@ -618,8 +614,10 @@ function enterChatScreen() {
     const overlay = document.querySelector('.sidebar-overlay');
     if (overlay) overlay.classList.remove('active');
 
+    if (tickInterval) clearInterval(tickInterval);
     tickInterval = setInterval(() => {
         try {
+            if (!engine) return;
             const expiredJson = engine.tick();
             const expired = JSON.parse(expiredJson);
             if (expired && expired.length > 0) {
@@ -751,9 +749,12 @@ function onConnected() {
 
     const session = sessions.get(currentSessionId);
     if (session) {
-        session.peerName = session.peerName === '新连接' ? '已连接' : session.peerName;
+        session.peerName = session.peerName === '新连接' || session.peerName === '已连接'
+            ? '对方' : session.peerName;
         renderSessionList();
     }
+
+    showToast('加密连接已建立', 'success');
 }
 
 function onDisconnected() {
