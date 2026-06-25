@@ -206,28 +206,40 @@ function setButtonLoading(btn, loading) {
 }
 
 async function main() {
-    await init();
-    storage = new EncryptedStorage();
-    await storage.init();
+    try {
+        console.log('main: initializing WASM...');
+        await init();
+        console.log('main: WASM initialized');
 
-    hasPassword = await storage.getSetting('has_password') === true;
-    const savedNet = await storage.getSetting('network');
-    if (savedNet) networkSettings = savedNet;
+        console.log('main: creating storage...');
+        storage = new EncryptedStorage();
+        await storage.init();
+        console.log('main: storage initialized');
 
-    const stored = localStorage.getItem('dechat_fingerprint');
-    if (stored && !hasPassword) {
-        document.getElementById('fingerprint').textContent = stored;
-        document.getElementById('identity-info').style.display = 'block';
+        hasPassword = await storage.getSetting('has_password') === true;
+        const savedNet = await storage.getSetting('network');
+        if (savedNet) networkSettings = savedNet;
+
+        const stored = localStorage.getItem('dechat_fingerprint');
+        if (stored && !hasPassword) {
+            document.getElementById('fingerprint').textContent = stored;
+            document.getElementById('identity-info').style.display = 'block';
+        }
+
+        if (hasPassword) {
+            showLockScreen();
+        }
+
+        console.log('main: setting up event listeners...');
+        setupEventListeners();
+        setupFileTransfer();
+        setupTypingIndicator();
+        setupNotifications();
+        console.log('main: ready');
+    } catch (e) {
+        console.error('main() error:', e);
+        showToast('应用初始化失败: ' + e.message, 'error');
     }
-
-    if (hasPassword) {
-        showLockScreen();
-    }
-
-    setupEventListeners();
-    setupFileTransfer();
-    setupTypingIndicator();
-    setupNotifications();
 }
 
 function showLockScreen() {
@@ -368,17 +380,22 @@ async function handleRecoveryConfirmed() {
 }
 
 async function handleInit(withPassword) {
-    createSession('新连接');
-    const session = sessions.get(currentSessionId);
+    try {
+        createSession('新连接');
+        const session = sessions.get(currentSessionId);
 
-    localStorage.setItem('dechat_fingerprint', session.fingerprint);
-    await storage.saveSetting('fingerprint', session.fingerprint);
+        localStorage.setItem('dechat_fingerprint', session.fingerprint);
+        await storage.saveSetting('fingerprint', session.fingerprint);
 
-    document.getElementById('my-fingerprint').textContent = session.fingerprint;
-    document.getElementById('setup-screen').style.display = 'none';
-    document.getElementById('lock-screen').style.display = 'none';
-    document.getElementById('main-screen').style.display = 'flex';
-    showConnectScreen();
+        document.getElementById('my-fingerprint').textContent = session.fingerprint;
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('main-screen').style.display = 'flex';
+        showConnectScreen();
+    } catch (e) {
+        console.error('handleInit error:', e);
+        showToast('初始化失败: ' + e.message, 'error');
+    }
 }
 
 async function handleUnlock() {
