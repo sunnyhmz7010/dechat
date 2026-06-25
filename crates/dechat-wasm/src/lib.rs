@@ -1,6 +1,5 @@
 use dechat_core::message::BurnConfig;
 use dechat_core::session::{ICECandidate, Session};
-use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -15,15 +14,11 @@ impl DechatEngine {
         DechatEngine { session: None }
     }
 
-    pub fn init(&mut self) -> JsValue {
+    pub fn init(&mut self) -> String {
         let session = Session::new();
         let fp = dechat_core::keys::fingerprint(&session.identity.public);
         self.session = Some(session);
-        serde_wasm_bindgen::to_value(&InitResult {
-            fingerprint: fp,
-            status: "initialized".to_string(),
-        })
-        .unwrap()
+        format!("{{\"fingerprint\":\"{}\",\"status\":\"initialized\"}}", fp)
     }
 
     pub fn create_offer(&self, sdp: &str, candidates_json: &str) -> Result<String, JsValue> {
@@ -69,15 +64,14 @@ impl DechatEngine {
                     .map_err(|e| JsValue::from_str(&e.to_string()))?,
             )
         };
-        let (payload_json, wire_bytes) = session
-            .encrypt_message(plaintext.as_bytes(), burn)
-            .map_err(|e| JsValue::from_str(&e))?;
-        let wire_json = String::from_utf8(wire_bytes).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let result = serde_json::json!({
-            "wire": wire_json,
-            "payload": payload_json,
-        });
-        Ok(result.to_string())
+        let result = session.encrypt_message(plaintext.as_bytes(), burn);
+        match result {
+            Ok((payload_json, wire_bytes)) => {
+                let wire_json = String::from_utf8_lossy(&wire_bytes);
+                Ok(format!("{{\"wire\":{},\"payload\":{}}}", wire_json, payload_json))
+            }
+            Err(e) => Err(JsValue::from_str(&e))
+        }
     }
 
     pub fn decrypt_message(
@@ -136,10 +130,4 @@ impl DechatEngine {
         }
         self.session = None;
     }
-}
-
-#[derive(Serialize, Deserialize)]
-struct InitResult {
-    fingerprint: String,
-    status: String,
 }
