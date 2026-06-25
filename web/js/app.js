@@ -636,8 +636,6 @@ function enterChatScreen() {
                 });
             }
         } catch (e) { /* ignore tick errors */ }
-            });
-        }
     }, 1000);
 }
 
