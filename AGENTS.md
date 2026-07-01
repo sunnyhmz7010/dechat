@@ -8,7 +8,7 @@
 | 核心协议 | Signal Protocol（X3DH + Double Ratchet） |
 | 通信方式 | WebRTC P2P 直连 |
 | 存储模式 | 仅内存 + IndexedDB 加密存储 |
-| 当前稳定版本 | `v0.1.0` |
+| 当前稳定版本 | 尚未发布 |
 
 ### 技术栈
 
