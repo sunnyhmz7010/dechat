@@ -7,9 +7,13 @@ export class RoomManager {
         this.roomId = null;
         this.isHost = false;
         this.peers = new Map();
+        this.connections = new Map();
+        this.messageHistory = [];
         this.onPeerJoined = null;
         this.onPeerLeft = null;
         this.onMessage = null;
+        this.onRoomCode = null;
+        this.onHistoryReceived = null;
     }
 
     async createRoom() {
@@ -17,9 +21,9 @@ export class RoomManager {
         this.roomId = this.generateRoomId();
         
         const conn = new SimpleP2P(this.rtcConfig, 
-            (data) => this.handleMessage(data),
-            () => this.handleConnect(),
-            () => this.handleDisconnect()
+            (data) => this.handleMessage(data, 'host'),
+            () => this.handleConnect('host'),
+            () => this.handleDisconnect('host')
         );
         
         const { sdp, candidates } = await conn.createOffer();
@@ -34,6 +38,8 @@ export class RoomManager {
         
         const compressed = pako.gzip(JSON.stringify(roomData));
         const roomCode = base62Encode(compressed);
+        
+        this.connections.set('host', conn);
         
         return {
             roomId: this.roomId,
@@ -61,13 +67,15 @@ export class RoomManager {
             const offerCandidates = offer.webrtc.candidates;
             
             const conn = new SimpleP2P(this.rtcConfig,
-                (data) => this.handleMessage(data),
-                () => this.handleConnect(),
-                () => this.handleDisconnect()
+                (data) => this.handleMessage(data, 'host'),
+                () => this.handleConnect('host'),
+                () => this.handleDisconnect('host')
             );
             
             const { sdp, candidates } = await conn.createAnswer(offerSdp, offerCandidates);
             const answerJson = this.engine.create_answer(offerJson, sdp, JSON.stringify(candidates));
+            
+            this.connections.set('host', conn);
             
             return {
                 roomId: this.roomId,
@@ -79,33 +87,150 @@ export class RoomManager {
         }
     }
 
-    generateRoomId() {
-        return Math.random().toString(36).substring(2, 10);
+    addPeer(peerId, conn) {
+        this.peers.set(peerId, {
+            id: peerId,
+            connection: conn,
+            joinedAt: Date.now()
+        });
+        
+        if (this.onPeerJoined) {
+            this.onPeerJoined(peerId);
+        }
     }
 
-    handleMessage(data) {
+    removePeer(peerId) {
+        const peer = this.peers.get(peerId);
+        if (peer) {
+            peer.connection.close();
+            this.peers.delete(peerId);
+            
+            if (this.onPeerLeft) {
+                this.onPeerLeft(peerId);
+            }
+        }
+    }
+
+    broadcastMessage(message) {
+        const messageStr = JSON.stringify(message);
+        
+        this.connections.forEach((conn, peerId) => {
+            if (conn.isConnected) {
+                conn.sendMessage(messageStr);
+            }
+        });
+        
+        this.peers.forEach((peer, peerId) => {
+            if (peer.connection.isConnected) {
+                peer.connection.sendMessage(messageStr);
+            }
+        });
+    }
+
+    sendToPeer(peerId, message) {
+        const conn = this.connections.get(peerId);
+        if (conn && conn.isConnected) {
+            conn.sendMessage(JSON.stringify(message));
+        }
+        
+        const peer = this.peers.get(peerId);
+        if (peer && peer.connection.isConnected) {
+            peer.connection.sendMessage(JSON.stringify(message));
+        }
+    }
+
+    handleMessage(data, peerId) {
         try {
             const msg = JSON.parse(data);
+            
+            if (msg.type === 'history_request') {
+                this.handleHistoryRequest(peerId);
+                return;
+            }
+            
+            if (msg.type === 'history_response') {
+                this.handleHistoryResponse(msg.messages);
+                return;
+            }
+            
+            if (msg.type === 'message') {
+                this.messageHistory.push(msg.payload);
+                if (this.messageHistory.length > 100) {
+                    this.messageHistory.shift();
+                }
+            }
+            
             if (this.onMessage) {
-                this.onMessage(msg);
+                this.onMessage(msg, peerId);
             }
         } catch (e) {
             console.error('Handle message error:', e);
         }
     }
 
-    handleConnect() {
-        console.log('Peer connected');
-        if (this.onPeerJoined) {
-            this.onPeerJoined();
+    handleHistoryRequest(peerId) {
+        const recentMessages = this.messageHistory.slice(-50);
+        this.sendToPeer(peerId, {
+            type: 'history_response',
+            messages: recentMessages
+        });
+    }
+
+    handleHistoryResponse(messages) {
+        if (messages && messages.length > 0) {
+            this.messageHistory = [...messages, ...this.messageHistory];
+            if (this.messageHistory.length > 100) {
+                this.messageHistory = this.messageHistory.slice(-100);
+            }
+            if (this.onHistoryReceived) {
+                this.onHistoryReceived(messages);
+            }
         }
     }
 
-    handleDisconnect() {
-        console.log('Peer disconnected');
-        if (this.onPeerLeft) {
-            this.onPeerLeft();
+    requestHistory() {
+        this.broadcastMessage({
+            type: 'history_request'
+        });
+    }
+
+    addToHistory(payload) {
+        this.messageHistory.push(payload);
+        if (this.messageHistory.length > 100) {
+            this.messageHistory.shift();
         }
+    }
+
+    handleConnect(peerId) {
+        console.log('Peer connected:', peerId);
+        if (this.onPeerJoined) {
+            this.onPeerJoined(peerId);
+        }
+    }
+
+    handleDisconnect(peerId) {
+        console.log('Peer disconnected:', peerId);
+        this.removePeer(peerId);
+    }
+
+    generateRoomId() {
+        return Math.random().toString(36).substring(2, 10);
+    }
+
+    getRoomInfo() {
+        return {
+            roomId: this.roomId,
+            isHost: this.isHost,
+            peerCount: this.peers.size + this.connections.size
+        };
+    }
+
+    destroy() {
+        this.connections.forEach(conn => conn.close());
+        this.peers.forEach(peer => peer.connection.close());
+        this.connections.clear();
+        this.peers.clear();
+        this.roomId = null;
     }
 }
 

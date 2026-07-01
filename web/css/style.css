@@ -81,6 +81,37 @@
     --z-panic: 1000;
 }
 
+[data-theme="light"] {
+    --color-primary: #2563EB;
+    --color-primary-light: #3B82F6;
+    --color-on-primary: #FFFFFF;
+    --color-secondary: #64748B;
+    --color-accent: #16A34A;
+    --color-accent-dim: rgba(22, 163, 74, 0.15);
+    --color-background: #F8FAFC;
+    --color-surface: #FFFFFF;
+    --color-surface-raised: #F1F5F9;
+    --color-foreground: #0F172A;
+    --color-foreground-secondary: #475569;
+    --color-foreground-muted: #94A3B8;
+    --color-border: rgba(0, 0, 0, 0.08);
+    --color-border-focus: rgba(37, 99, 235, 0.5);
+    --color-destructive: #DC2626;
+    --color-destructive-dim: rgba(220, 38, 38, 0.15);
+    --color-warning: #D97706;
+    --color-warning-dim: rgba(217, 119, 6, 0.15);
+    --color-success: #16A34A;
+    --color-ring: #2563EB;
+    --color-msg-self: #DBEAFE;
+    --color-msg-other: #F1F5F9;
+    --color-msg-burn: #FEE2E2;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.1);
+}
+
 html {
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
@@ -1124,4 +1155,65 @@ textarea.input-field {
     .sidebar-footer {
         padding: var(--space-2) var(--space-4);
     }
+}
+
+.video-controls {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.video-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 300px;
+    aspect-ratio: 16/9;
+    background: var(--color-background);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.video-wrapper video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.remote-videos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.remote-video-wrapper {
+    position: relative;
+    width: 150px;
+    aspect-ratio: 16/9;
+    background: var(--color-background);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.remote-video-wrapper video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.video-active {
+    background: var(--color-destructive-dim);
+    color: var(--color-destructive);
+}
+
+.audio-active {
+    background: var(--color-accent-dim);
+    color: var(--color-accent);
 }

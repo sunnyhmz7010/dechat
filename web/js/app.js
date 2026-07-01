@@ -2,10 +2,14 @@ import init, { SealedChatEngine } from '../pkg/sealedchat_wasm.js';
 import { EncryptedStorage } from './storage.js';
 import { generateRecoveryPhrase, verifyPhrase } from './password.js';
 import { base62Encode, base62Decode } from './encoding.js';
+import { RoomManager } from './room.js';
+import { VideoManager } from './video.js';
 
 let engine = null;
 let storage = null;
 let connection = null;
+let roomManager = null;
+let videoManager = null;
 let burnEnabled = false;
 let burnDuration = 30;
 let burnMode = 'on_read';
@@ -232,6 +236,7 @@ async function main() {
         }
 
         console.log('main: setting up event listeners...');
+        loadTheme();
         setupEventListeners();
         setupFileTransfer();
         setupTypingIndicator();
@@ -297,6 +302,11 @@ function setupEventListeners() {
     document.getElementById('btn-save-network').addEventListener('click', handleSaveNetwork);
     document.getElementById('btn-lock-now').addEventListener('click', handleLockNow);
     document.getElementById('btn-show-recovery').addEventListener('click', handleShowRecovery);
+    document.getElementById('btn-theme-dark').addEventListener('click', () => setTheme('dark'));
+    document.getElementById('btn-theme-light').addEventListener('click', () => setTheme('light'));
+    document.getElementById('btn-video').addEventListener('click', handleVideoCall);
+    document.getElementById('btn-audio').addEventListener('click', handleAudioCall);
+    document.getElementById('btn-screen-share').addEventListener('click', handleScreenShare);
 
     document.getElementById('msg-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -467,26 +477,32 @@ async function handleCreateRoom() {
 
     try {
         const session = sessions.get(currentSessionId);
-        const conn = new SimpleP2P(getRTCConfig(), onMessageReceived, onConnected, onDisconnected);
-        session.connection = conn;
-        connection = conn;
-
-        showToast('正在创建房间...', 'info');
-        const { sdp, candidates } = await conn.createOffer();
-        const offerJson = engine.create_offer(sdp, JSON.stringify(candidates));
         
-        const roomId = Math.random().toString(36).substring(2, 10);
-        const roomData = {
-            v: 1,
-            type: 'room',
-            id: roomId,
-            offer: offerJson
+        roomManager = new RoomManager(engine, getRTCConfig());
+        roomManager.onMessage = (msg, peerId) => onMessageReceived(JSON.stringify(msg));
+        roomManager.onPeerJoined = (peerId) => {
+            showToast(`${peerId} 加入了房间`, 'info');
+            updateOnlineUsers();
+        };
+        roomManager.onPeerLeft = (peerId) => {
+            showToast(`${peerId} 离开了房间`, 'warning');
+            updateOnlineUsers();
+        };
+        roomManager.onHistoryReceived = (messages) => {
+            messages.forEach(msg => {
+                if (msg.payload) {
+                    addMessageToUI(msg.payload, msg.fromSelf || false, msg.isBurn || false);
+                }
+            });
         };
         
-        const compressed = pako.gzip(JSON.stringify(roomData));
-        const roomCode = base62Encode(compressed);
+        showToast('正在创建房间...', 'info');
+        const result = await roomManager.createRoom();
         
-        document.getElementById('output-room-code').value = roomCode;
+        session.connection = result.connection;
+        connection = result.connection;
+        
+        document.getElementById('output-room-code').value = result.roomCode;
         document.getElementById('room-output').style.display = 'block';
         document.getElementById('join-input').style.display = 'none';
         
@@ -520,38 +536,52 @@ async function handleJoinConfirm() {
     setButtonLoading(btn, true);
 
     try {
-        const compressed = base62Decode(roomCode);
-        const roomDataStr = pako.ungzip(compressed, { to: 'string' });
-        const roomData = JSON.parse(roomDataStr);
-        
-        if (roomData.v !== 1 || roomData.type !== 'room') {
-            throw new Error('无效的房间码');
-        }
-        
         const session = sessions.get(currentSessionId);
-        const offerJson = roomData.offer;
-        const offer = JSON.parse(offerJson);
-        const offerSdp = atob(offer.webrtc.sdp);
-        const offerCandidates = offer.webrtc.candidates;
-
-        const conn = new SimpleP2P(getRTCConfig(), onMessageReceived, onConnected, onDisconnected);
-        session.connection = conn;
-        connection = conn;
-
+        
+        roomManager = new RoomManager(engine, getRTCConfig());
+        roomManager.onMessage = (msg, peerId) => onMessageReceived(JSON.stringify(msg));
+        roomManager.onPeerJoined = (peerId) => {
+            showToast(`已连接到房间`, 'success');
+            updateOnlineUsers();
+        };
+        roomManager.onPeerLeft = (peerId) => {
+            showToast(`连接断开`, 'warning');
+            updateOnlineUsers();
+        };
+        roomManager.onHistoryReceived = (messages) => {
+            messages.forEach(msg => {
+                if (msg.payload) {
+                    addMessageToUI(msg.payload, msg.fromSelf || false, msg.isBurn || false);
+                }
+            });
+        };
+        
         showToast('正在加入房间...', 'info');
-        const { sdp, candidates } = await conn.createAnswer(offerSdp, offerCandidates);
-
-        const answerJson = engine.create_answer(offerJson, sdp, JSON.stringify(candidates));
-        document.getElementById('output-room-code').value = answerJson;
+        const result = await roomManager.joinRoom(roomCode);
+        
+        session.connection = result.connection;
+        connection = result.connection;
+        
+        document.getElementById('output-room-code').value = result.answerJson;
         document.getElementById('room-output').style.display = 'block';
         document.getElementById('join-input').style.display = 'none';
-
+        
         showToast('已加入房间，连接建立中...', 'success');
     } catch (e) {
         showToast('加入房间失败: ' + e.message, 'error');
     } finally {
         setButtonLoading(btn, false);
     }
+}
+
+function updateOnlineUsers() {
+    const onlineUsers = document.getElementById('online-users');
+    if (!onlineUsers) return;
+    
+    const roomInfo = roomManager ? roomManager.getRoomInfo() : null;
+    const peerCount = roomInfo ? roomInfo.peerCount : 0;
+    
+    onlineUsers.textContent = `在线: ${peerCount + 1} 人`;
 }
 
 async function handleCreateOffer() {
@@ -752,7 +782,14 @@ async function handleSend() {
         const resultObj = JSON.parse(result);
         const payload = JSON.parse(resultObj.payload);
 
-        if (connection && connection.isConnected) {
+        if (roomManager) {
+            roomManager.broadcastMessage(JSON.parse(result));
+            roomManager.addToHistory({
+                payload,
+                fromSelf: true,
+                isBurn: burnEnabled
+            });
+        } else if (connection && connection.isConnected) {
             connection.sendMessage(result);
         }
 
@@ -847,6 +884,10 @@ function onConnected() {
         session.peerName = session.peerName === '新连接' || session.peerName === '已连接'
             ? '对方' : session.peerName;
         renderSessionList();
+    }
+
+    if (roomManager) {
+        roomManager.requestHistory();
     }
 
     showToast('加密连接已建立', 'success');
@@ -986,9 +1027,24 @@ async function handleShowRecovery() {
     alert('恢复短语功能需要在设置密码时保存。如需重新生成，请重置密码。');
 }
 
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    
+    document.getElementById('btn-theme-dark').className = theme === 'dark' ? 'btn btn-secondary btn-sm' : 'btn btn-ghost btn-sm';
+    document.getElementById('btn-theme-light').className = theme === 'light' ? 'btn btn-secondary btn-sm' : 'btn btn-ghost btn-sm';
+}
+
+function loadTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    setTheme(savedTheme);
+}
+
 async function handlePanic() {
     if (!confirm('确定要销毁所有数据吗？此操作不可逆。')) return;
 
+    if (videoManager) videoManager.destroy();
+    if (roomManager) roomManager.destroy();
     if (connection) connection.close();
     if (engine) engine.destroy();
     if (storage) await storage.destroy();
@@ -1002,6 +1058,80 @@ async function handlePanic() {
             <button onclick="location.reload()" class="btn btn-primary" style="padding:12px 24px;font-size:1rem;">重新开始</button>
         </div>
     `;
+}
+
+async function handleVideoCall() {
+    const btn = document.getElementById('btn-video');
+    
+    if (videoManager && videoManager.isVideoEnabled) {
+        videoManager.toggleVideo();
+        btn.classList.remove('video-active');
+        showToast('视频已关闭', 'info');
+    } else {
+        try {
+            if (!videoManager) {
+                videoManager = new VideoManager(roomManager);
+            }
+            
+            await videoManager.startLocalStream();
+            const localVideo = document.getElementById('local-video');
+            localVideo.srcObject = videoManager.localStream;
+            
+            document.getElementById('video-container').style.display = 'flex';
+            btn.classList.add('video-active');
+            showToast('视频已开启', 'success');
+        } catch (e) {
+            showToast('无法访问摄像头: ' + e.message, 'error');
+        }
+    }
+}
+
+async function handleAudioCall() {
+    const btn = document.getElementById('btn-audio');
+    
+    if (videoManager && videoManager.isAudioEnabled) {
+        videoManager.toggleAudio();
+        btn.classList.remove('audio-active');
+        showToast('麦克风已关闭', 'info');
+    } else {
+        try {
+            if (!videoManager) {
+                videoManager = new VideoManager(roomManager);
+            }
+            
+            if (!videoManager.localStream) {
+                await videoManager.startLocalStream();
+            }
+            
+            videoManager.toggleAudio();
+            btn.classList.add('audio-active');
+            showToast('麦克风已开启', 'success');
+        } catch (e) {
+            showToast('无法访问麦克风: ' + e.message, 'error');
+        }
+    }
+}
+
+async function handleScreenShare() {
+    const btn = document.getElementById('btn-screen-share');
+    
+    if (videoManager && videoManager.isScreenSharing) {
+        videoManager.stopScreenShare();
+        btn.classList.remove('video-active');
+        showToast('屏幕共享已停止', 'info');
+    } else {
+        try {
+            if (!videoManager) {
+                videoManager = new VideoManager(roomManager);
+            }
+            
+            await videoManager.startScreenShare();
+            btn.classList.add('video-active');
+            showToast('屏幕共享已开始', 'success');
+        } catch (e) {
+            showToast('无法共享屏幕: ' + e.message, 'error');
+        }
+    }
 }
 
 const RTC = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
