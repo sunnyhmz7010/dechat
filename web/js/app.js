@@ -465,9 +465,9 @@ async function handleRecover() {
 function showConnectScreen() {
     document.getElementById('connect-screen').style.display = 'flex';
     document.getElementById('chat-screen').style.display = 'none';
-    document.getElementById('offer-output').style.display = 'none';
-    document.getElementById('answer-input').style.display = 'none';
-    document.getElementById('input-offer').value = '';
+    document.getElementById('room-output').style.display = 'none';
+    document.getElementById('join-input').style.display = 'none';
+    document.getElementById('input-room-code').value = '';
     document.getElementById('input-answer').value = '';
 }
 
