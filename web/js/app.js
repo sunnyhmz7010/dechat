@@ -1,6 +1,7 @@
-import init, { DechatEngine } from '../pkg/dechat_wasm.js';
+import init, { SealedChatEngine } from '../pkg/sealedchat_wasm.js';
 import { EncryptedStorage } from './storage.js';
 import { generateRecoveryPhrase, verifyPhrase } from './password.js';
+import { base62Encode, base62Decode } from './encoding.js';
 
 let engine = null;
 let storage = null;
@@ -22,7 +23,7 @@ let currentSessionId = null;
 
 function createSession(peerName) {
     const id = 'session_' + Date.now();
-    const engineInstance = new DechatEngine();
+    const engineInstance = new SealedChatEngine();
     engineInstance.init();
 
     const session = {
@@ -220,7 +221,7 @@ async function main() {
         const savedNet = await storage.getSetting('network');
         if (savedNet) networkSettings = savedNet;
 
-        const stored = localStorage.getItem('dechat_fingerprint');
+        const stored = localStorage.getItem('sealedchat_fingerprint');
         if (stored && !hasPassword) {
             document.getElementById('fingerprint').textContent = stored;
             document.getElementById('identity-info').style.display = 'block';
@@ -266,10 +267,11 @@ function setupEventListeners() {
         createSession('新连接');
         showConnectScreen();
     });
-    document.getElementById('btn-create-offer').addEventListener('click', handleCreateOffer);
-    document.getElementById('btn-accept-offer').addEventListener('click', handleAcceptOffer);
-    document.getElementById('btn-copy-offer').addEventListener('click', handleCopyOffer);
+    document.getElementById('btn-create-room').addEventListener('click', handleCreateRoom);
+    document.getElementById('btn-join-room').addEventListener('click', handleJoinRoom);
+    document.getElementById('btn-copy-room-code').addEventListener('click', handleCopyRoomCode);
     document.getElementById('btn-show-qr').addEventListener('click', handleShowQR);
+    document.getElementById('btn-join-confirm').addEventListener('click', handleJoinConfirm);
     document.getElementById('btn-complete').addEventListener('click', handleComplete);
     document.getElementById('btn-send').addEventListener('click', handleSend);
     document.getElementById('btn-panic').addEventListener('click', handlePanic);
@@ -384,7 +386,7 @@ async function handleInit(withPassword) {
         createSession('新连接');
         const session = sessions.get(currentSessionId);
 
-        localStorage.setItem('dechat_fingerprint', session.fingerprint);
+        localStorage.setItem('sealedchat_fingerprint', session.fingerprint);
         await storage.saveSetting('fingerprint', session.fingerprint);
 
         document.getElementById('my-fingerprint').textContent = session.fingerprint;
@@ -459,6 +461,99 @@ function showConnectScreen() {
     document.getElementById('input-answer').value = '';
 }
 
+async function handleCreateRoom() {
+    const btn = document.getElementById('btn-create-room');
+    setButtonLoading(btn, true);
+
+    try {
+        const session = sessions.get(currentSessionId);
+        const conn = new SimpleP2P(getRTCConfig(), onMessageReceived, onConnected, onDisconnected);
+        session.connection = conn;
+        connection = conn;
+
+        showToast('正在创建房间...', 'info');
+        const { sdp, candidates } = await conn.createOffer();
+        const offerJson = engine.create_offer(sdp, JSON.stringify(candidates));
+        
+        const roomId = Math.random().toString(36).substring(2, 10);
+        const roomData = {
+            v: 1,
+            type: 'room',
+            id: roomId,
+            offer: offerJson
+        };
+        
+        const compressed = pako.gzip(JSON.stringify(roomData));
+        const roomCode = base62Encode(compressed);
+        
+        document.getElementById('output-room-code').value = roomCode;
+        document.getElementById('room-output').style.display = 'block';
+        document.getElementById('join-input').style.display = 'none';
+        
+        showToast('房间已创建，等待其他人加入', 'success');
+    } catch (e) {
+        showToast('创建房间失败: ' + e.message, 'error');
+    } finally {
+        setButtonLoading(btn, false);
+    }
+}
+
+function handleJoinRoom() {
+    document.getElementById('room-output').style.display = 'none';
+    document.getElementById('join-input').style.display = 'block';
+}
+
+function handleCopyRoomCode() {
+    const text = document.getElementById('output-room-code').value;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('房间码已复制到剪贴板', 'success');
+    }).catch(() => {
+        showToast('复制失败，请手动复制', 'error');
+    });
+}
+
+async function handleJoinConfirm() {
+    const roomCode = document.getElementById('input-room-code').value.trim();
+    if (!roomCode) return;
+
+    const btn = document.getElementById('btn-join-confirm');
+    setButtonLoading(btn, true);
+
+    try {
+        const compressed = base62Decode(roomCode);
+        const roomDataStr = pako.ungzip(compressed, { to: 'string' });
+        const roomData = JSON.parse(roomDataStr);
+        
+        if (roomData.v !== 1 || roomData.type !== 'room') {
+            throw new Error('无效的房间码');
+        }
+        
+        const session = sessions.get(currentSessionId);
+        const offerJson = roomData.offer;
+        const offer = JSON.parse(offerJson);
+        const offerSdp = atob(offer.webrtc.sdp);
+        const offerCandidates = offer.webrtc.candidates;
+
+        const conn = new SimpleP2P(getRTCConfig(), onMessageReceived, onConnected, onDisconnected);
+        session.connection = conn;
+        connection = conn;
+
+        showToast('正在加入房间...', 'info');
+        const { sdp, candidates } = await conn.createAnswer(offerSdp, offerCandidates);
+
+        const answerJson = engine.create_answer(offerJson, sdp, JSON.stringify(candidates));
+        document.getElementById('output-room-code').value = answerJson;
+        document.getElementById('room-output').style.display = 'block';
+        document.getElementById('join-input').style.display = 'none';
+
+        showToast('已加入房间，连接建立中...', 'success');
+    } catch (e) {
+        showToast('加入房间失败: ' + e.message, 'error');
+    } finally {
+        setButtonLoading(btn, false);
+    }
+}
+
 async function handleCreateOffer() {
     const btn = document.getElementById('btn-create-offer');
     setButtonLoading(btn, true);
@@ -492,7 +587,7 @@ function handleCopyOffer() {
 }
 
 function handleShowQR() {
-    const text = document.getElementById('output-offer').value;
+    const text = document.getElementById('output-room-code').value;
     const qrDiv = document.getElementById('qr-code');
 
     if (qrDiv.style.display === 'block') {
@@ -938,7 +1033,7 @@ class SimpleP2P {
     }
 
     async createOffer() {
-        this.channel = this.pc.createDataChannel('dechat');
+        this.channel = this.pc.createDataChannel('sealedchat');
         this.setupChannel(this.channel);
 
         const offer = await this.pc.createOffer();

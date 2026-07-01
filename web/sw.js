@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dechat-v1';
+const CACHE_NAME = 'sealedchat-v1';
 const ASSETS = [
     '/',
     '/index.html',
@@ -7,8 +7,11 @@ const ASSETS = [
     '/js/storage.js',
     '/js/password.js',
     '/js/qrcode.min.js',
-    '/pkg/dechat_wasm.js',
-    '/pkg/dechat_wasm_bg.wasm',
+    '/js/pako.min.js',
+    '/js/encoding.js',
+    '/js/room.js',
+    '/pkg/sealedchat_wasm.js',
+    '/pkg/sealedchat_wasm_bg.wasm',
 ];
 
 self.addEventListener('install', (event) => {

@@ -1,26 +1,26 @@
-use dechat_core::message::BurnConfig;
-use dechat_core::session::{ICECandidate, Session};
+use sealedchat_core::message::BurnConfig;
+use sealedchat_core::session::{ICECandidate, Session};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-pub struct DechatEngine {
+pub struct SealedChatEngine {
     session: Rc<RefCell<Option<Session>>>,
 }
 
 #[wasm_bindgen]
-impl DechatEngine {
+impl SealedChatEngine {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> DechatEngine {
-        DechatEngine {
+    pub fn new() -> SealedChatEngine {
+        SealedChatEngine {
             session: Rc::new(RefCell::new(None)),
         }
     }
 
     pub fn init(&self) -> String {
         let session = Session::new();
-        let fp = dechat_core::keys::fingerprint(&session.identity.public);
+        let fp = sealedchat_core::keys::fingerprint(&session.identity.public);
         *self.session.borrow_mut() = Some(session);
         format!("{{\"fingerprint\":\"{}\",\"status\":\"initialized\"}}", fp)
     }
@@ -137,7 +137,7 @@ impl DechatEngine {
         let guard = self.session.borrow();
         guard
             .as_ref()
-            .map(|s| dechat_core::keys::fingerprint(&s.identity.public))
+            .map(|s| sealedchat_core::keys::fingerprint(&s.identity.public))
             .unwrap_or_default()
     }
 

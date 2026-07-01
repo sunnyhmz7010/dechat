@@ -1,4 +1,4 @@
-const DB_NAME = 'dechat';
+const DB_NAME = 'sealedchat';
 const DB_VERSION = 1;
 
 export class EncryptedStorage {
@@ -70,7 +70,7 @@ export class EncryptedStorage {
             'raw', identityKeyBytes, 'PBKDF2', false, ['deriveKey']
         );
 
-        const salt = enc.encode('dechat-identity-salt');
+        const salt = enc.encode('sealedchat-identity-salt');
         this.storageKey = await crypto.subtle.deriveKey(
             { name: 'PBKDF2', salt, iterations: 10000, hash: 'SHA-256' },
             keyMaterial,

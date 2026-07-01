@@ -18,13 +18,15 @@
 | P2P 通信 | WebRTC DataChannel |
 | 本地存储 | IndexedDB (AES-256-GCM 加密) |
 | 前端 | 纯 HTML/CSS/JS |
+| 压缩 | pako (zlib) |
+| 编码 | Base62 |
 
 ### 关键路径
 
 | 目录 | 用途 |
 |------|------|
-| `crates/dechat-core` | Rust 核心加密逻辑 |
-| `crates/dechat-wasm` | WASM 绑定层 |
+| `crates/sealedchat-core` | Rust 核心加密逻辑 |
+| `crates/sealedchat-wasm` | WASM 绑定层 |
 | `web/` | 前端静态资源 |
 
 ## 架构约束
@@ -54,6 +56,16 @@
 |------|------|
 | 构建 WASM | `build.bat` |
 | 启动本地服务器 | `cd web && npx serve .` |
+| 运行 Rust 测试 | `cargo test` |
+| 检查代码 | `cargo clippy` |
+| 格式化代码 | `cargo fmt` |
+
+### 测试与验证
+
+| 场景 | 命令 |
+|------|------|
+| Rust 单元测试 | `cargo test` |
+| WASM 构建测试 | `wasm-pack build --target web` |
 
 ### 部署
 
@@ -62,3 +74,53 @@
 - Cloudflare Pages
 - Netlify
 - 任何 HTTP 服务器
+
+### 发布流程
+
+1. 更新版本号 (Cargo.toml)
+2. 运行 `cargo test` 确保通过
+3. 提交并推送
+4. 创建 GitHub Release
+
+### 代码规范
+
+- 使用中文注释
+- 遵循 Rust 风格指南
+- 提交信息使用中文
+
+## 后续开发计划
+
+| 阶段 | 功能 | 优先级 |
+|------|------|--------|
+| **Phase 1** | 项目改名 + 房间机制 + 文档 | ✅ 已完成 |
+| **Phase 2** | 多人聊天（3-5 人 Full Mesh） | 高 |
+| **Phase 3** | 暗色/亮色主题 | 中 |
+| **Phase 4** | 消息回填 | 中 |
+| **Phase 5** | 多人音视频通话 | 中 |
+
+### Phase 2：多人聊天
+
+- 实现 Full Mesh 连接管理
+- 房间创建者作为协调者
+- 消息广播给所有 peer
+- 更新 UI 显示在线成员
+
+### Phase 3：暗色/亮色主题
+
+- 定义 CSS 变量（颜色系统）
+- 实现主题切换按钮
+- 保存用户偏好
+
+### Phase 4：消息回填
+
+- 新 peer 加入时请求历史消息
+- 现有 peer 响应历史消息请求
+- 消息合并去重
+
+### Phase 5：多人音视频通话
+
+- 实现 WebRTC 音视频流
+- 实现 Mesh 音视频连接
+- 添加音视频 UI
+- 实现通话控制
+- 实现屏幕共享

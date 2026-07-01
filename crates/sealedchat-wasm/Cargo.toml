@@ -1,5 +1,5 @@
 [package]
-name = "dechat-wasm"
+name = "sealedchat-wasm"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-dechat-core = { path = "../dechat-core" }
+sealedchat-core = { path = "../sealedchat-core" }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 serde = { version = "1", features = ["derive"] }

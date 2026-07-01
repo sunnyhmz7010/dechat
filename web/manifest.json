@@ -1,6 +1,6 @@
 {
-    "name": "DeChat - 去中心化加密聊天",
-    "short_name": "DeChat",
+    "name": "SealedChat - 去中心化加密聊天",
+    "short_name": "SealedChat",
     "description": "零服务器端到端加密聊天",
     "start_url": "/",
     "display": "standalone",
