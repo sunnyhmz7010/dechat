@@ -8,6 +8,7 @@
 | 核心协议 | Signal Protocol（X3DH + Double Ratchet） |
 | 通信方式 | WebRTC P2P 直连 |
 | 存储模式 | 仅内存 + IndexedDB 加密存储 |
+| 当前稳定版本 | `v0.1.0` |
 
 ### 技术栈
 
@@ -23,11 +24,16 @@
 
 ### 关键路径
 
-| 目录 | 用途 |
+| 用途 | 路径 |
 |------|------|
-| `crates/sealedchat-core` | Rust 核心加密逻辑 |
-| `crates/sealedchat-wasm` | WASM 绑定层 |
-| `web/` | 前端静态资源 |
+| Rust 核心加密逻辑 | `crates/sealedchat-core/src/` |
+| WASM 绑定层 | `crates/sealedchat-wasm/src/` |
+| 前端静态资源 | `web/` |
+| 主应用逻辑 | `web/js/app.js` |
+| 房间机制 | `web/js/room.js` |
+| 加密存储 | `web/js/storage.js` |
+| 版本号 | `Cargo.toml` (workspace root) |
+| 构建脚本 | `build.bat` |
 
 ## 架构约束
 
@@ -47,6 +53,14 @@
 - 纯静态应用，`web/` 目录可部署到任何静态托管服务
 - 不依赖后端服务器，所有通信 P2P 直连
 - 消息仅存在于浏览器内存/本地加密存储
+- 房间码包含完整 WebRTC offer/answer，经过 pako 压缩 + Base62 编码
+- 多人聊天采用 Full Mesh 拓扑，每对 peer 独立建立 P2P 连接
+
+### 信令约束
+
+- 房间码是唯一的"信令"机制，不依赖信令服务器
+- 房间码通过带外方式（复制粘贴）交换
+- ICE Candidate 必须在生成房间码前收集完毕
 
 ## 开发规范
 
@@ -60,12 +74,25 @@
 | 检查代码 | `cargo clippy` |
 | 格式化代码 | `cargo fmt` |
 
+### 环境约束
+
+- Rust 1.70+
+- wasm-pack
+- Node.js 18+
+- 现代浏览器（支持 WebRTC）
+
 ### 测试与验证
 
 | 场景 | 命令 |
 |------|------|
 | Rust 单元测试 | `cargo test` |
 | WASM 构建测试 | `wasm-pack build --target web` |
+
+### 依赖管理
+
+- `Cargo.toml` 定义 workspace 成员，不要随意添加新 crate
+- 前端依赖通过 CDN 或本地文件引入，不使用 npm 管理
+- `pako` 和 `qrcode` 以 minified JS 文件形式存放在 `web/js/`
 
 ### 部署
 
@@ -87,6 +114,36 @@
 - 使用中文注释
 - 遵循 Rust 风格指南
 - 提交信息使用中文
+- 前端代码不使用框架，保持纯 HTML/CSS/JS
+
+## 版本历史
+
+### 版本标签格式
+
+| 类型 | 格式 |
+|------|------|
+| 稳定版 | `v0.1.0` |
+| 预发布 | `v0.1.1-beta.1` |
+
+### 发布流程
+
+1. 更新 `Cargo.toml` 中的版本号
+2. 运行 `cargo test` 确保通过
+3. 运行 `build.bat` 确保 WASM 构建成功
+4. 提交并推送
+5. 创建 GitHub Release（标题使用纯标签名，如 `v0.1.0`）
+
+### 发布检查清单
+
+发布时需同步更新：
+- `Cargo.toml` 版本号（workspace 下各 crate）
+- `README.md`（如功能描述、截图或 URL 有变）
+
+### README 同步规则
+
+- 核心功能变更时，更新「核心能力」和「功能细节」章节
+- 安全模型变更时，更新「安全模型」表格
+- 技术栈变更时，更新「技术栈」和「项目结构」章节
 
 ## 后续开发计划
 

@@ -1,14 +1,17 @@
 <div align="center">
   <h1>SealedChat</h1>
-  <p>去中心化端到端加密聊天 · 阅后即焚 · 零服务器依赖</p>
+  <p>基于 WebRTC 和 Signal Protocol 的去中心化加密聊天应用，无需服务器即可安全通信</p>
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/License-GPL%20v2-blue.svg" alt="License">
-  <img src="https://img.shields.io/badge/Release-v0.1.0-green.svg" alt="Release">
+  <a href="https://github.com/sunnyhmz7010/SealedChat/releases"><img src="https://img.shields.io/github/v/release/sunnyhmz7010/SealedChat?label=Release&color=3b82f6" alt="Release" /></a>
+  <a href="https://github.com/sunnyhmz7010/SealedChat/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sunnyhmz7010/SealedChat?color=10b981" alt="License" /></a>
 </p>
+
 <p align="center">
-  <a href="https://sunnyhmz7010.github.io/sealedchat/">在线预览 · 反馈问题 · 下载源码</a>
+  <a href="https://sunnyhmz7010.github.io/sealedchat/">在线预览</a> ·
+  <a href="https://github.com/sunnyhmz7010/SealedChat/issues">反馈问题</a> ·
+  <a href="https://github.com/sunnyhmz7010/SealedChat">下载源码</a>
 </p>
 
 ---
@@ -21,10 +24,6 @@
 - **Signal Protocol**：采用业界最强的端到端加密协议，确保消息安全
 - **阅后即焚**：消息可设置自动销毁，防止数据残留
 - **恐慌按钮**：紧急情况下一键销毁所有数据
-
-## 📸 截图预览
-
-*截图待添加*
 
 ## 🚀 核心能力
 
@@ -212,7 +211,7 @@ cargo fmt
 
 ## 📄 许可证
 
-本项目基于 [GPL v2](./LICENSE) 开源。
+本项目基于 [GPL-3.0](./LICENSE) 开源。
 
 ## ⭐ 星标历史
 
