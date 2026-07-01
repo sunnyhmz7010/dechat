@@ -30,7 +30,7 @@ jobs:
 
       - name: Build WASM
         run: wasm-pack build --target web --out-dir ../../web/pkg
-        working-directory: crates/dechat-wasm
+        working-directory: crates/sealedchat-wasm
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
